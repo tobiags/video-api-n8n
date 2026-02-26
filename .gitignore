@@ -1,0 +1,45 @@
+# Secrets — NE JAMAIS commiter
+.env
+.env.production
+.env.local
+*.env
+service-account.json
+**/service-account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Bibliothèque de clips (données locales, non versionnées)
+library_index.json
+audio_storage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

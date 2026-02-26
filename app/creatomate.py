@@ -140,9 +140,6 @@ async def _poll_render(
     """
     elapsed = 0.0
     while elapsed < settings.CREATOMATE_RENDER_TIMEOUT:
-        await asyncio.sleep(settings.CREATOMATE_POLLING_INTERVAL)
-        elapsed += settings.CREATOMATE_POLLING_INTERVAL
-
         resp = await http_client.get(
             f"{settings.CREATOMATE_BASE_URL}/renders/{render_id}",
             headers={"Authorization": f"Bearer {settings.creatomate_api_key}"},
@@ -172,6 +169,8 @@ async def _poll_render(
             status,
             elapsed,
         )
+        await asyncio.sleep(settings.CREATOMATE_POLLING_INTERVAL)
+        elapsed += settings.CREATOMATE_POLLING_INTERVAL
 
     raise CreatomateRenderTimeoutError(
         f"Render {render_id} timeout après {settings.CREATOMATE_RENDER_TIMEOUT}s"

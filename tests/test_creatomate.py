@@ -19,25 +19,6 @@ def env_vars(monkeypatch):
         monkeypatch.setenv(k, v)
 
 
-def _make_render_request():
-    from app.models import CreatomateRenderRequest
-    return CreatomateRenderRequest(
-        template_id="tmpl-v",
-        audio_url="/tmp/audio.mp3",
-        clips=[
-            VideoClip(section_id=1, source=ClipSource.KLING,
-                      url="https://cdn/clip1.mp4", duration_seconds=5.0),
-            VideoClip(section_id=2, source=ClipSource.PEXELS,
-                      url="https://cdn/clip2.mp4", duration_seconds=5.0),
-        ],
-        timestamps=[
-            WordTimestamp(word="Hello", start_ms=0, end_ms=500),
-            WordTimestamp(word="world", start_ms=600, end_ms=1100),
-        ],
-        cta_text="Contactez-nous",
-        format=VideoFormat.VERTICAL,
-    )
-
 
 @pytest.mark.asyncio
 async def test_assemble_video_returns_render_result(env_vars):

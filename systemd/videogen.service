@@ -1,0 +1,42 @@
+[Unit]
+Description=VideoGen API — Système d'automatisation pub vidéo
+After=network.target
+# Redémarre automatiquement si le VPS redémarre (PRD §2.2 systemd persistance)
+
+[Service]
+Type=exec
+User=videogen
+Group=videogen
+WorkingDirectory=/opt/videogen/api
+
+# Chargement des variables d'environnement depuis .env
+EnvironmentFile=/opt/videogen/api/.env
+
+# Lancement via Gunicorn avec worker Uvicorn (async natif FastAPI)
+ExecStart=/opt/videogen/venv/bin/gunicorn -c gunicorn.conf.py app.main:app
+
+# Redémarrage automatique en cas de crash (PRD §5.1 — VPS redémarre)
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Logs capturés par journalctl
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=videogen-api
+
+# Sécurité basique
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
+# ─── Instructions déploiement VPS ────────────────────────────────────────────
+# sudo cp systemd/videogen.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable videogen
+# sudo systemctl start videogen
+# sudo systemctl status videogen
+# sudo journalctl -u videogen -f       # Logs en temps réel

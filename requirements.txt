@@ -1,0 +1,33 @@
+# ─── Web Framework ────────────────────────────────────────────────────────────
+fastapi==0.115.13
+uvicorn[standard]==0.34.0
+gunicorn==23.0.0
+
+# ─── HTTP Client ──────────────────────────────────────────────────────────────
+httpx[http2]==0.28.1
+
+# ─── Config & Validation ──────────────────────────────────────────────────────
+pydantic==2.11.3
+pydantic-settings==2.8.1
+
+# ─── Claude / Anthropic ───────────────────────────────────────────────────────
+anthropic==0.50.0
+
+# ─── ElevenLabs ───────────────────────────────────────────────────────────────
+# On utilise l'API REST directement via httpx (plus de contrôle sur les timeouts)
+# elevenlabs==1.x si préféré au SDK
+
+# ─── Kling JWT Auth ───────────────────────────────────────────────────────────
+PyJWT==2.10.1
+
+# ─── Google APIs ──────────────────────────────────────────────────────────────
+google-api-python-client==2.166.0
+google-auth==2.38.0
+google-auth-httplib2==0.2.0
+
+# ─── Tests ────────────────────────────────────────────────────────────────────
+pytest==8.3.5
+pytest-asyncio==0.25.3
+
+# ─── Dev ──────────────────────────────────────────────────────────────────────
+python-dotenv==1.1.0  # chargement .env en dev (pydantic-settings le fait auto)
