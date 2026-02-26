@@ -39,21 +39,7 @@ VALID_CLAUDE_JSON = {
     ],
 }
 
-MINIMAL_ENV = {
-    "API_SECRET_KEY": "test-secret-key-32-chars-minimum!!",
-    "ANTHROPIC_API_KEY": "sk-ant-test",
-    "ELEVENLABS_API_KEY": "el-test",
-    "ELEVENLABS_DEFAULT_VOICE_ID": "voice-id-test",
-    "KLING_ACCESS_KEY": "kling-access-test",
-    "KLING_SECRET_KEY": "kling-secret-test",
-    "PEXELS_API_KEY": "pexels-test",
-    "CREATOMATE_API_KEY": "creat-test",
-    "CREATOMATE_TEMPLATE_VERTICAL": "tmpl-v",
-    "CREATOMATE_TEMPLATE_HORIZONTAL": "tmpl-h",
-    "GOOGLE_SERVICE_ACCOUNT_PATH": "/tmp/sa.json",
-    "GOOGLE_DRIVE_FOLDER_ID": "drive-id",
-    "GOOGLE_SHEETS_ID": "sheets-id",
-}
+from tests.conftest import MINIMAL_ENV
 
 
 @pytest.fixture

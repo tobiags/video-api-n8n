@@ -11,7 +11,7 @@ import httpx
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tests.test_claude import MINIMAL_ENV
+from tests.conftest import MINIMAL_ENV
 
 
 @pytest.fixture
@@ -79,8 +79,9 @@ async def test_generate_voiceover_retries_on_error(env_vars, tmp_path, monkeypat
     mock_client = AsyncMock(spec=httpx.AsyncClient)
     mock_client.post.side_effect = httpx.HTTPError("Connection failed")
 
-    with pytest.raises(ElevenLabsAPIError):
-        await generate_voiceover("Hello", "voice-123", mock_client, settings)
+    with patch("asyncio.sleep", new=AsyncMock()):
+        with pytest.raises(ElevenLabsAPIError):
+            await generate_voiceover("Hello", "voice-123", mock_client, settings)
 
     # ELEVENLABS_MAX_RETRIES=2 → 2 calls total (attempt 0 and 1)
     assert mock_client.post.call_count == 2
