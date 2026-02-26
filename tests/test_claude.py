@@ -114,3 +114,57 @@ async def test_analyze_script_retries_on_invalid_json(env_vars):
 
     # Must have been called CLAUDE_MAX_RETRIES=3 times
     assert mock_client_instance.messages.create.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_analyze_script_retries_on_duration_mismatch(env_vars):
+    from app.claude import analyze_script
+    from app.config import Settings
+    from app.errors import ClaudeInvalidJSONError
+
+    # Valid JSON but section durations don't sum to total_duration (3+3=6 != 10)
+    bad_durations_json = {
+        "total_duration": 10,
+        "sections": [
+            {
+                "id": 1,
+                "text": "p1",
+                "start": 0,
+                "end": 3,
+                "duration": 3,
+                "broll_prompt": "entrepreneur bureau lumière 9:16 section 1",
+                "keywords": ["entrepreneur"],
+                "scene_type": "emotion",
+            },
+            {
+                "id": 2,
+                "text": "p2",
+                "start": 3,
+                "end": 6,
+                "duration": 3,
+                "broll_prompt": "produit gros plan 9:16 section 2",
+                "keywords": ["produit"],
+                "scene_type": "cta",
+            },
+        ],
+    }
+
+    bad_response = MagicMock()
+    bad_response.content = [MagicMock(text=json.dumps(bad_durations_json))]
+
+    mock_client_instance = AsyncMock()
+    mock_client_instance.messages.create = AsyncMock(return_value=bad_response)
+
+    with patch("app.claude.anthropic.AsyncAnthropic", return_value=mock_client_instance):
+        with pytest.raises(ClaudeInvalidJSONError):
+            await analyze_script(
+                script="Script test " * 10,
+                format_=VideoFormat.VERTICAL,
+                duration=10,
+                aspect_ratio="9:16",
+                http_client=AsyncMock(spec=httpx.AsyncClient),
+                settings=Settings(),
+            )
+
+    # Must have exhausted all CLAUDE_MAX_RETRIES=3 attempts
+    assert mock_client_instance.messages.create.call_count == 3

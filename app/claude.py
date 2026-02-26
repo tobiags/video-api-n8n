@@ -9,9 +9,11 @@ Responsabilités :
 """
 import json
 import logging
+import re
 
 import anthropic
 import httpx
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.errors import ClaudeAPIError, ClaudeInvalidJSONError
@@ -85,7 +87,7 @@ async def analyze_script(
         ClaudeAPIError:         Erreur API Anthropic
         ClaudeInvalidJSONError: JSON invalide après N tentatives
     """
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, http_client=http_client)
     messages = [
         {
             "role": "user",
@@ -114,11 +116,10 @@ async def analyze_script(
             )
             raw = response.content[0].text.strip()
 
-            # Clean up optional markdown ```json ... ``` block
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
+            # Clean up optional markdown ```json ... ``` block (M-1)
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw)
+            if match:
+                raw = match.group(1)
 
             data = json.loads(raw)
             analysis = ScriptAnalysis(**data)
@@ -130,7 +131,11 @@ async def analyze_script(
             )
             return analysis
 
-        except Exception as e:
+        except anthropic.APIError as e:
+            # I-1: non-retryable API errors (HTTP 401, 500, rate-limit, …)
+            raise ClaudeAPIError(f"Erreur API Anthropic : {e}") from e
+
+        except (json.JSONDecodeError, ValidationError, Exception) as e:
             last_error = e
             logger.warning(
                 "Claude tentative %d/%d échouée : %s",
@@ -139,7 +144,7 @@ async def analyze_script(
                 e,
             )
             if attempt < settings.CLAUDE_MAX_RETRIES - 1:
-                messages.append({"role": "assistant", "content": raw if raw else ""})
+                messages.append({"role": "assistant", "content": raw})  # M-2
                 messages.append(
                     {
                         "role": "user",
