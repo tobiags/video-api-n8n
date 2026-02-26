@@ -164,6 +164,7 @@ def _build_word_timestamps(alignment: dict) -> list[WordTimestamp]:
     words: list[WordTimestamp] = []
     current_word = ""
     word_start_ms = 0
+    word_end_ms = 0  # track last letter's end time
 
     for char, start_s, end_s in zip(chars, starts, ends):
         if char in (" ", "\n"):
@@ -171,12 +172,13 @@ def _build_word_timestamps(alignment: dict) -> list[WordTimestamp]:
                 words.append(WordTimestamp(
                     word=current_word,
                     start_ms=word_start_ms,
-                    end_ms=int(end_s * 1000),
+                    end_ms=word_end_ms,  # last letter's end, not space's end
                 ))
                 current_word = ""
         else:
             if not current_word:
                 word_start_ms = int(start_s * 1000)
+            word_end_ms = int(end_s * 1000)
             current_word += char
 
     # Dernier mot sans espace final
@@ -184,7 +186,7 @@ def _build_word_timestamps(alignment: dict) -> list[WordTimestamp]:
         words.append(WordTimestamp(
             word=current_word,
             start_ms=word_start_ms,
-            end_ms=int(ends[-1] * 1000) if ends else word_start_ms + 500,
+            end_ms=word_end_ms,
         ))
 
     return words

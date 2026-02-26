@@ -9,7 +9,7 @@ import base64
 
 import httpx
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from tests.test_claude import MINIMAL_ENV
 
@@ -83,4 +83,24 @@ async def test_generate_voiceover_retries_on_error(env_vars, tmp_path, monkeypat
         await generate_voiceover("Hello", "voice-123", mock_client, settings)
 
     # ELEVENLABS_MAX_RETRIES=2 → 2 calls total (attempt 0 and 1)
+    assert mock_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_voiceover_raises_timeout_error(env_vars, tmp_path, monkeypatch):
+    from app.elevenlabs import generate_voiceover
+    from app.config import Settings
+    from app.errors import ElevenLabsTimeoutError
+
+    monkeypatch.setattr("app.elevenlabs.AUDIO_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("LIBRARY_PATH", str(tmp_path / "clips"))
+    settings = Settings()
+
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.post.side_effect = httpx.TimeoutException("timed out")
+
+    with patch("asyncio.sleep", new=AsyncMock()):
+        with pytest.raises(ElevenLabsTimeoutError):
+            await generate_voiceover("Hello", "voice-123", mock_client, settings)
+
     assert mock_client.post.call_count == 2
