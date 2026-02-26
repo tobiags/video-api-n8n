@@ -16,7 +16,7 @@ MINIMAL_ENV = {
     "ELEVENLABS_API_KEY": "el-test",
     "ELEVENLABS_DEFAULT_VOICE_ID": "voice-id-test",
     "KLING_ACCESS_KEY": "kling-access-test",
-    "KLING_SECRET_KEY": "kling-secret-test",
+    "KLING_SECRET_KEY": "kling-secret-test-padded-32chars!",
     "PEXELS_API_KEY": "pexels-test",
     "CREATOMATE_API_KEY": "creat-test",
     "CREATOMATE_TEMPLATE_VERTICAL": "tmpl-v",
