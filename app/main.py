@@ -508,7 +508,6 @@ async def run_pipeline(
     except asyncio.TimeoutError:
         detail = f"Pipeline timeout après {settings.HTTP_TIMEOUT_VIDEO_GEN}s"
         logger.error("Pipeline timeout job_id=%s", job_id)
-        job.status = JobStatus.FAILED
         job.error = detail
         _update_job_progress(
             job, JobStatus.FAILED, "Timeout pipeline", job.progress.percentage, detail
