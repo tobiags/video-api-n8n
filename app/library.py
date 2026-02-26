@@ -69,11 +69,9 @@ async def library_search(
         if score < settings.LIBRARY_SCORE_THRESHOLD:
             return None
         clip_id = data.get("clip_id")
-        # Try to match by clip_id first; fall back to first candidate when
-        # Claude omits clip_id (e.g. single-candidate index or legacy response).
         matched = next((c for c in candidates if c.clip_id == clip_id), None)
         if matched is None:
-            matched = candidates[0]
+            return None
         return LibrarySearchResult(
             clip=matched, relevance_score=score,
             matched_keywords=[k for k in section.keywords if k in matched.keywords],
@@ -112,14 +110,19 @@ async def pexels_search(
         return None
 
 
-async def add_to_library(clip: VideoClip, section: ScriptSection, settings: Settings) -> LibraryClip:
+async def add_to_library(
+    clip: VideoClip,
+    section: ScriptSection,
+    settings: Settings,
+    format_: VideoFormat = VideoFormat.VERTICAL,
+) -> LibraryClip:
     clips = load_library_index(settings)
     lib_clip = LibraryClip(
         filename=clip.url.split("/")[-1] if clip.url else f"{section.id}.mp4",
         theme=section.scene_type.value,
         keywords=section.keywords,
         duration_seconds=clip.duration_seconds,
-        format=VideoFormat.VERTICAL,  # deduce from clip if possible
+        format=format_,
     )
     clips.append(lib_clip)
     save_library_index(clips, settings)
@@ -162,7 +165,7 @@ async def select_library_clips(
             logger.info("Kling generation section %d (aucun clip en bibliothèque/Pexels)", section.id)
             try:
                 clip = await generate_single_clip(section, format_, http_client, settings)
-                await add_to_library(clip, section, settings)
+                await add_to_library(clip, section, settings, format_)
             except Exception as e:
                 logger.error("Kling échec section %d : %s — clip vide", section.id, e)
                 clip = VideoClip(section_id=section.id, source=ClipSource.KLING,

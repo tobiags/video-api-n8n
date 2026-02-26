@@ -42,7 +42,7 @@ async def test_library_search_returns_match_above_threshold(env_vars, library_di
     )
 
     mock_message = MagicMock()
-    mock_message.content = [MagicMock(text='{"score": 0.85, "reason": "Correspondance directe"}')]
+    mock_message.content = [MagicMock(text='{"score": 0.85, "clip_id": "clip-1", "reason": "Correspondance directe"}')]
 
     with patch("app.library.anthropic.AsyncAnthropic") as mock_anthro:
         mock_client_instance = AsyncMock()
