@@ -205,6 +205,10 @@ server {
     listen 80;
     server_name <VOTRE_DOMAINE>;
 
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
+    }
+
     location / {
         proxy_pass         http://127.0.0.1:8000;
         proxy_set_header   Host $host;
@@ -236,10 +240,11 @@ sudo systemctl reload nginx
 ### 3.3 Obtenir le certificat Let's Encrypt (certbot)
 
 ```bash
-# Obtenir le certificat via webroot (nginx reste actif, certbot utilise le port 80)
-sudo certbot certonly --webroot -w /var/www/html -d <VOTRE_DOMAINE>
-# OU si webroot ne convient pas :
+# Option recommandée : certbot modifie temporairement nginx lui-même
 sudo certbot certonly --nginx -d <VOTRE_DOMAINE>
+
+# Alternative si --nginx échoue :
+# sudo certbot certonly --webroot -w /var/www/html -d <VOTRE_DOMAINE>
 
 # Vérifier le renouvellement automatique
 sudo certbot renew --dry-run
