@@ -185,16 +185,79 @@ Le service est défini comme suit (extrait) :
 nginx joue le rôle de reverse proxy : il reçoit les requêtes HTTPS sur le
 port 443 et les transmet à Gunicorn qui écoute sur `localhost:8000`.
 
-### 3.1 Créer le bloc server
+La configuration se fait en deux temps : d'abord une config HTTP-only pour
+permettre à certbot de vérifier le domaine, puis la config SSL complète une
+fois le certificat obtenu.
+
+### 3.1 Config nginx HTTP-only (temporaire pour certbot)
 
 ```bash
 sudo nano /etc/nginx/sites-available/videogen
 ```
 
-Contenu à coller :
+Contenu à coller (config HTTP-only, sans SSL) :
 
 ```nginx
-# /etc/nginx/sites-available/videogen
+# /etc/nginx/sites-available/videogen — config temporaire HTTP-only
+# Remplacer <VOTRE_DOMAINE> par le FQDN réel (ex : api.mondomaine.com)
+
+server {
+    listen 80;
+    server_name <VOTRE_DOMAINE>;
+
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+```
+
+### 3.2 Activer la config HTTP-only et tester nginx
+
+```bash
+# Activer le site (crée un lien symbolique)
+sudo ln -s /etc/nginx/sites-available/videogen /etc/nginx/sites-enabled/
+
+# Supprimer le site par défaut si présent
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Vérifier la syntaxe nginx
+sudo nginx -t
+# Attendu : nginx: configuration file /etc/nginx/nginx.conf syntax is ok
+
+# Démarrer / recharger nginx
+sudo systemctl reload nginx
+```
+
+### 3.3 Obtenir le certificat Let's Encrypt (certbot)
+
+```bash
+# Obtenir le certificat via webroot (nginx reste actif, certbot utilise le port 80)
+sudo certbot certonly --webroot -w /var/www/html -d <VOTRE_DOMAINE>
+# OU si webroot ne convient pas :
+sudo certbot certonly --nginx -d <VOTRE_DOMAINE>
+
+# Vérifier le renouvellement automatique
+sudo certbot renew --dry-run
+```
+
+### 3.4 Config nginx SSL complète (remplace la config HTTP-only)
+
+Une fois les certificats présents dans `/etc/letsencrypt/live/<VOTRE_DOMAINE>/`,
+remplacer intégralement le contenu du fichier de configuration :
+
+```bash
+sudo nano /etc/nginx/sites-available/videogen
+```
+
+Contenu à coller (config SSL complète) :
+
+```nginx
+# /etc/nginx/sites-available/videogen — config SSL définitive
 # Remplacer <VOTRE_DOMAINE> par le FQDN réel (ex : api.mondomaine.com)
 
 server {
@@ -254,42 +317,16 @@ server {
 }
 ```
 
-### 3.2 Activer la configuration
+### 3.5 Tester et recharger nginx avec la config SSL
 
 ```bash
-# Activer le site (crée un lien symbolique)
-sudo ln -s /etc/nginx/sites-available/videogen /etc/nginx/sites-enabled/
-
-# Supprimer le site par défaut si présent
-sudo rm -f /etc/nginx/sites-enabled/default
-
-# Vérifier la syntaxe nginx
+# Vérifier la syntaxe (les fichiers de certificats doivent maintenant exister)
 sudo nginx -t
 # Attendu : nginx: configuration file /etc/nginx/nginx.conf syntax is ok
 
-# Recharger nginx
+# Recharger nginx pour appliquer la config SSL
 sudo systemctl reload nginx
 ```
-
-### 3.3 Obtenir le certificat Let's Encrypt
-
-```bash
-# Arrêter nginx temporairement (certbot a besoin du port 80)
-sudo systemctl stop nginx
-
-# Obtenir le certificat
-sudo certbot certonly --standalone -d <VOTRE_DOMAINE>
-
-# Redémarrer nginx
-sudo systemctl start nginx
-
-# Vérifier le renouvellement automatique
-sudo certbot renew --dry-run
-```
-
-> **Alternative :** `sudo certbot --nginx -d <VOTRE_DOMAINE>` modifie
-> automatiquement la configuration nginx mais peut écraser le bloc
-> personnalisé ci-dessus. Préférer `certonly` et configurer manuellement.
 
 ---
 
