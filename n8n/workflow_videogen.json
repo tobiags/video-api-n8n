@@ -163,7 +163,7 @@
         "rules": {
           "rules": [
             {
-              "value": "completed"
+              "value": "success"
             },
             {
               "value": "blocking_error"
@@ -171,36 +171,6 @@
           ]
         },
         "fallbackOutput": "none"
-      }
-    },
-    {
-      "id": "1a2b3c4d-0007-0007-0007-000000000007",
-      "name": "Upload Google Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [680, 460],
-      "parameters": {
-        "operation": "upload",
-        "name": "={{ $json.body.row_id }}_pub.mp4",
-        "driveId": {
-          "__rl": true,
-          "value": "My Drive",
-          "mode": "list"
-        },
-        "folderId": {
-          "__rl": true,
-          "value": "={{ $env.GOOGLE_DRIVE_FOLDER_ID }}",
-          "mode": "id"
-        },
-        "binaryData": false,
-        "fileContent": "={{ $json.body.video_url }}",
-        "options": {}
-      },
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "google-drive-cred",
-          "name": "Google Drive OAuth2"
-        }
       }
     },
     {
@@ -226,7 +196,7 @@
           "value": {
             "row_id": "={{ $('Webhook Callback').item.json.body.row_id }}",
             "Statut": "Livré",
-            "Lien output": "={{ $json.webViewLink }}",
+            "Lien output": "={{ $('Webhook Callback').item.json.body.drive_url }}",
             "Statut détail": "Pub générée avec succès"
           },
           "matchingColumns": ["row_id"],
@@ -340,7 +310,7 @@
       "main": [
         [
           {
-            "node": "Upload Google Drive",
+            "node": "Update Sheets Livré",
             "type": "main",
             "index": 0
           }
@@ -348,17 +318,6 @@
         [
           {
             "node": "Update Sheets Erreur",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upload Google Drive": {
-      "main": [
-        [
-          {
-            "node": "Update Sheets Livré",
             "type": "main",
             "index": 0
           }
