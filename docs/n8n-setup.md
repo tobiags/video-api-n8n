@@ -15,7 +15,6 @@ Dans l'interface n8n → **Settings → Variables**, définir :
 | Variable | Valeur | Description |
 |---|---|---|
 | `GOOGLE_SHEETS_ID` | `1BxiMVs0...` | ID du Google Sheet (dans l'URL) |
-| `GOOGLE_DRIVE_FOLDER_ID` | `1AbcXYZ...` | ID du dossier Drive de destination |
 | `VIDEOGEN_API_URL` | `http://<api-service-name>:8000` | URL interne Docker de l'API VideoGen (voir section Coolify ci-dessous) |
 | `VIDEOGEN_API_SECRET` | `votre-clé-secrète` | Valeur de `API_SECRET_KEY` dans Coolify env vars |
 | `N8N_WEBHOOK_URL` | `http://<n8n-service-name>:5678` | URL interne Docker de n8n — utilisée par l'API pour le callback |
@@ -115,18 +114,21 @@ La feuille doit s'appeler **`Campagnes`** avec ces colonnes (ordre exact) :
 |---|---|
 | `ENVIRONMENT` | `production` |
 | `WORKERS` | `1` |
-| `API_SECRET_KEY` | `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `TRUSTED_HOSTS` | `localhost,127.0.0.1,<api-service-name>` | Remplacer `<api-service-name>` par le vrai nom du service Coolify |
+| `API_SECRET_KEY` | `<générer : python -c "import secrets; print(secrets.token_hex(32))">` |
 | `ANTHROPIC_API_KEY` | `sk-ant-...` |
 | `ELEVENLABS_API_KEY` | `...` |
 | `KLING_ACCESS_KEY` | `...` |
 | `KLING_SECRET_KEY` | `...` |
 | `PEXELS_API_KEY` | `...` |
 | `CREATOMATE_API_KEY` | `...` |
-| `GOOGLE_SERVICE_ACCOUNT_PATH` | `/run/secrets/service_account.json` (voir note ci-dessous) |
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | `/run/secrets/service_account.json` (Coolify Docker — différent du déploiement systemd `/opt/videogen/`) |
 | `GOOGLE_DRIVE_FOLDER_ID` | `...` |
 | `GOOGLE_SHEETS_ID` | `...` |
 | `N8N_WEBHOOK_NOTIFICATION_URL` | `http://<n8n-service-name>:5678/webhook/videogen-callback` |
 | `LOGO_URL` | `https://ton-cdn.com/logo.png` |
+
+> **Variables requises non listées :** `ELEVENLABS_DEFAULT_VOICE_ID`, `CREATOMATE_TEMPLATE_VERTICAL`, `CREATOMATE_TEMPLATE_HORIZONTAL` sont obligatoires (défaut absent dans `config.py`). Voir `.env.example` pour la liste complète.
 
 7. **Deploy** → Coolify build l'image et démarre le container
 
@@ -152,7 +154,7 @@ Puis dans les env vars : `GOOGLE_SERVICE_ACCOUNT_PATH=/run/secrets/service_accou
 
 Les deux services (n8n et videogen-api) doivent être dans le même **projet** Coolify pour partager le réseau Docker.
 
-- n8n → API : `http://<api-service-name>:8000/generate`
+- n8n → API : `http://<api-service-name>:8000` (variable `VIDEOGEN_API_URL`)
 - API → n8n : `http://<n8n-service-name>:5678/webhook/videogen-callback`
 
 Le port 8000 de l'API ne doit **pas** être exposé publiquement.
