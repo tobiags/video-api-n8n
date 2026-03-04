@@ -1,13 +1,34 @@
+# ─── Secrets ─────────────────────────────────────────────────────────────────
 .env
-.env.*
+.env.local
+.env.production
+.env.staging
+service-account.json
+**/service-account*.json
+service_account.json
+**/service_account*.json
+
+# ─── Tests ───────────────────────────────────────────────────────────────────
 tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ─── Python cache ─────────────────────────────────────────────────────────────
 __pycache__/
-**/__pycache__/
 *.pyc
-*.pyo
+
+# ─── Git ─────────────────────────────────────────────────────────────────────
 .git/
 .gitignore
-docs/
-.pytest_cache/
+
+# ─── Dev tooling ─────────────────────────────────────────────────────────────
 .ruff_cache/
+Makefile
+pyproject.toml
+
+# ─── Docs & config non runtime ───────────────────────────────────────────────
+docs/
 *.md
+n8n/
+systemd/
