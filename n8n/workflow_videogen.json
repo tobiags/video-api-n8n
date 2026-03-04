@@ -170,7 +170,7 @@
             }
           ]
         },
-        "fallbackOutput": "none"
+        "fallbackOutput": "last"
       }
     },
     {
@@ -232,9 +232,9 @@
         "columns": {
           "mappingMode": "defineBelow",
           "value": {
-            "row_id": "={{ $json.body.row_id }}",
+            "row_id": "={{ $('Webhook Callback').item.json.body.row_id }}",
             "Statut": "Erreur",
-            "Statut détail": "={{ $json.body.message ?? 'Erreur inconnue' }}"
+            "Statut détail": "={{ $('Webhook Callback').item.json.body.message ?? 'Erreur inconnue' }}"
           },
           "matchingColumns": ["row_id"],
           "schema": []
