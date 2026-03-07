@@ -23,6 +23,10 @@ from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
+
 import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -122,6 +126,18 @@ async def lifespan(app: FastAPI):
 def create_app(settings: Settings | None = None) -> FastAPI:
     if settings is None:
         settings = get_settings()
+
+    # ── Sentry (optionnel — activé seulement si SENTRY_DSN est défini) ───────
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            integrations=[StarletteIntegration(), FastApiIntegration()],
+            environment=settings.ENVIRONMENT,
+            release=settings.APP_VERSION,
+            traces_sample_rate=0.1,   # 10% des requêtes → performance monitoring
+            send_default_pii=False,   # RGPD : pas de données perso dans les traces
+        )
+        logging.getLogger(__name__).info("Sentry initialisé [%s]", settings.ENVIRONMENT)
 
     app = FastAPI(
         title=settings.APP_NAME,

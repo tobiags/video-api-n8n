@@ -113,6 +113,10 @@ class Settings(BaseSettings):
     HTTP_MAX_CONNECTIONS: int = 20
     HTTP_MAX_KEEPALIVE: int = 10
 
+    # ── Monitoring / Sentry ──────────────────────────────────────────────────────
+    # DSN optionnel — si absent, Sentry est désactivé (dev local, tests)
+    SENTRY_DSN: str | None = None
+
     # ── Notifications ────────────────────────────────────────────────────────
     # URL webhook n8n pour callbacks (succès, erreur, alerte crédits)
     N8N_WEBHOOK_NOTIFICATION_URL: str | None = None

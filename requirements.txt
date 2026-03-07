@@ -29,5 +29,8 @@ google-auth-httplib2==0.2.0
 pytest==8.3.5
 pytest-asyncio==0.25.3
 
+# ─── Monitoring ───────────────────────────────────────────────────────────────
+sentry-sdk[fastapi]>=2.0
+
 # ─── Dev ──────────────────────────────────────────────────────────────────────
 python-dotenv==1.1.0  # chargement .env en dev (pydantic-settings le fait auto)
