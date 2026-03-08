@@ -56,7 +56,7 @@ class AuthenticationError(VideoGenException):
 
 class RequestValidationError_(VideoGenException):
     """Payload n8n → FastAPI malformé (distinct de pydantic RequestValidationError)."""
-    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     error_code = "VALIDATION_ERROR"
 
 
