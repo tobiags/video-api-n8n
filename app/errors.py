@@ -227,7 +227,7 @@ def register_exception_handlers(app: FastAPI) -> None:
         return _build_error_response(
             error="Payload de requête invalide",
             error_code="VALIDATION_ERROR",
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=exc.errors(),
         )
 
