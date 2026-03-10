@@ -74,6 +74,7 @@ async def assemble_video(
         cta_text=row.cta,
         music_url=row.music_url,
         format=row.format,
+        target_duration_seconds=elevenlabs_result.audio_duration_seconds,
     )
 
     last_error: Exception | None = None
@@ -265,11 +266,11 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
             "track": 5,
             "text": request.cta_text,
             "font_family": "Montserrat",
-            "font_size": "8 vmin",
+            "font_size": "4 vmin",
             "font_weight": "700",
             "fill_color": "#ffffff",
             "stroke_color": "#000000",
-            "stroke_width": "0.5 vmin",
+            "stroke_width": "0.3 vmin",
             "x": "50%",
             "y": "85%",
             "width": "85%",
@@ -279,10 +280,14 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
         })
 
     # ── Payload racine (format RenderScript /v2) ──────────────────────────────
-    return {
+    # duration = durée audio réelle → cap la composition (évite 7min de clips Pexels)
+    payload: dict = {
         "output_format": "mp4",
         "width": width,
         "height": height,
         "frame_rate": 25,
         "elements": elements,
     }
+    if request.target_duration_seconds:
+        payload["duration"] = round(request.target_duration_seconds, 2)
+    return payload

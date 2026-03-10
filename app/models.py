@@ -76,9 +76,7 @@ class SheetsRow(BaseModel):
     @field_validator("duration")
     @classmethod
     def validate_duration(cls, v: int) -> int:
-        allowed = {90, 120, 180}
-        if v not in allowed:
-            raise ValueError(f"Durée doit être dans {allowed}, reçu : {v}")
+        # Toute valeur entre 30s et 300s est acceptée (Field ge=30/le=300 gère déjà la plage)
         return v
 
     @property
@@ -271,6 +269,11 @@ class CreatomateRenderRequest(BaseModel):
     cta_text: str = ""
     music_url: str | None = None
     format: VideoFormat = VideoFormat.VERTICAL
+    # Durée réelle de la voix off (audio_duration_seconds) — cap la composition
+    # Évite que les clips Pexels (naturellement 15-60s) allongent la vidéo
+    target_duration_seconds: float | None = Field(
+        None, description="Durée cible composition = durée audio ElevenLabs"
+    )
 
     @model_validator(mode="after")
     def validate_clips_ordered(self) -> "CreatomateRenderRequest":

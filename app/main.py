@@ -470,8 +470,12 @@ async def run_pipeline(
                 "Génération de la voix off", 25,
                 f"Clone vocal {row.voice_id}",
             )
+            # Texte narré = sections Claude propres (sans titres, headers, balises)
+            # row.script = script brut Google Sheets (contient des titres/structure)
+            # script_analysis.sections[].text = voix off réelle générée par Claude
+            voiceover_text = " ".join(s.text for s in script_analysis.sections)
             elevenlabs_result = await generate_voiceover(
-                script=row.script,
+                script=voiceover_text,
                 voice_id=row.voice_id,
                 http_client=http_client,
                 settings=settings,
