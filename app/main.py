@@ -33,6 +33,7 @@ import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, get_settings
@@ -52,6 +53,7 @@ from app.models import (
 )
 
 # Imports stubs — implémentés aux Jours 2 & 3
+from app.monitor_html import MONITOR_HTML
 from app.claude import analyze_script
 from app.elevenlabs import generate_voiceover
 from app.kling import generate_clips
@@ -327,6 +329,44 @@ def _build_router():
             created_at=job.created_at,
             updated_at=job.updated_at,
         )
+
+    # ── Dashboard de monitoring ───────────────────────────────────────────────
+    @router.get(
+        "/monitor",
+        response_class=HTMLResponse,
+        summary="Dashboard de monitoring des jobs",
+        tags=["Infrastructure"],
+        include_in_schema=False,
+    )
+    async def monitor_dashboard() -> HTMLResponse:
+        """Interface visuelle HTML du pipeline (auth gérée côté JS via Bearer)."""
+        return HTMLResponse(content=MONITOR_HTML)
+
+    # ── Liste de tous les jobs (pour le dashboard) ────────────────────────────
+    @router.get(
+        "/jobs",
+        response_model=list[JobStatusResponse],
+        summary="Liste de tous les jobs (dashboard)",
+        tags=["Génération"],
+    )
+    async def list_jobs(
+        request: Request,
+        _: SecureEndpoint,
+    ) -> list[JobStatusResponse]:
+        jobs: dict = request.app.state.jobs
+        return [
+            JobStatusResponse(
+                job_id=job.job_id,
+                row_id=job.row_id,
+                status=job.status,
+                progress=job.progress,
+                drive_url=job.drive_url,
+                error=job.error,
+                created_at=job.created_at,
+                updated_at=job.updated_at,
+            )
+            for job in sorted(jobs.values(), key=lambda j: j.created_at, reverse=True)
+        ]
 
     return router
 
