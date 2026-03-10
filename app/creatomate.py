@@ -2,11 +2,14 @@
 creatomate.py — Assemblage vidéo final (PRD §4.4)
 
 Responsabilités :
+  - Générer dynamiquement la composition JSON (approche "source", pas de template statique)
   - Envoyer voix off + clips + timestamps à Creatomate
   - Polling du rendu (toutes les 15s, timeout 15 min)
   - Retry x2 si le rendu échoue (PRD §5.1)
-  - Deux templates : vertical_ad (9:16) et horizontal_ad (16:9)
-  - Synchronisation sous-titres mot par mot (ElevenLabs → Creatomate)
+  - Deux formats : vertical_ad (9:16) et horizontal_ad (16:9)
+
+NOTE : on n'utilise plus CREATOMATE_TEMPLATE_VERTICAL / HORIZONTAL.
+La composition est construite en code selon le nombre de clips retourné par Claude.
 """
 import asyncio
 import logging
@@ -28,6 +31,12 @@ from app.models import (
 
 logger = logging.getLogger(__name__)
 
+# Dimensions par format
+_DIMENSIONS: dict[VideoFormat, tuple[int, int]] = {
+    VideoFormat.VERTICAL:   (1080, 1920),  # 9:16
+    VideoFormat.HORIZONTAL: (1920, 1080),  # 16:9
+}
+
 
 async def assemble_video(
     script_analysis: ScriptAnalysis,
@@ -40,22 +49,13 @@ async def assemble_video(
     """
     Assemble la vidéo finale via Creatomate (PRD §4.4).
 
-    Ce que Creatomate reçoit :
-      - audio_url   : MP3 voix off ElevenLabs
+    Génère dynamiquement la composition JSON (source) selon :
+      - audio_url   : MP3 voix off ElevenLabs (URL publique)
       - clips       : N MP4 dans l'ordre des sections
-      - timestamps  : [{word, start_ms, end_ms}] pour sous-titres animés
-      - logo_url    : URL du logo (overlay automatique)
+      - logo_url    : URL du logo (overlay)
       - cta_text    : Texte call-to-action final
-      - music_url   : Musique de fond (volume ajusté par template)
-      - template_id : vertical_ad (9:16) ou horizontal_ad (16:9)
-
-    Args:
-        script_analysis:   Résultat Claude (sections ordonnées)
-        elevenlabs_result: Audio MP3 + timestamps
-        clips:             Clips vidéo ordonnés par section_id
-        row:               Données Google Sheets (format, cta, musique, logo)
-        http_client:       Client HTTP partagé
-        settings:          Configuration application
+      - music_url   : Musique de fond (volume 15%)
+      - format      : vertical (9:16) ou horizontal (16:9)
 
     Returns:
         CreatomateRenderResult avec URL du MP4 final
@@ -64,14 +64,9 @@ async def assemble_video(
         CreatomateAPIError:           Erreur API Creatomate
         CreatomateRenderTimeoutError: Rendu > CREATOMATE_RENDER_TIMEOUT secondes
     """
-    template_id = (
-        settings.CREATOMATE_TEMPLATE_VERTICAL
-        if row.format == VideoFormat.VERTICAL
-        else settings.CREATOMATE_TEMPLATE_HORIZONTAL
-    )
-
+    # template_id factice (modèle Pydantic l'exige, non utilisé dans le payload source)
     request = CreatomateRenderRequest(
-        template_id=template_id,
+        template_id="source",
         audio_url=elevenlabs_result.audio_path,
         clips=sorted(clips, key=lambda c: c.section_id),
         timestamps=elevenlabs_result.timestamps,
@@ -111,7 +106,7 @@ async def _submit_render(
     settings: Settings,
 ) -> str:
     """POST /renders — soumet le job de rendu et retourne le render_id."""
-    payload = _build_render_payload(request, settings)
+    payload = _build_source_payload(request)
     resp = await http_client.post(
         f"{settings.CREATOMATE_BASE_URL}/renders",
         headers={
@@ -121,10 +116,17 @@ async def _submit_render(
         json=payload,
         timeout=30.0,
     )
-    resp.raise_for_status()
+    if not resp.is_success:
+        raise CreatomateAPIError(
+            f"Creatomate API {resp.status_code} : {resp.text[:300]}"
+        )
     renders = resp.json()
     render_id = renders[0]["id"]
-    logger.info("Creatomate render soumis : render_id=%s", render_id)
+    n_clips = sum(1 for c in request.clips if c.url)
+    logger.info(
+        "Creatomate render soumis : render_id=%s | %d clips | audio=%s",
+        render_id, n_clips, request.audio_url[:60],
+    )
     return render_id
 
 
@@ -147,9 +149,9 @@ async def _poll_render(
         )
         resp.raise_for_status()
         data = resp.json()
-        status = data["status"]
+        render_status = data["status"]
 
-        if status == "succeeded":
+        if render_status == "succeeded":
             logger.info("Creatomate render terminé : %s", render_id)
             return CreatomateRenderResult(
                 render_id=render_id,
@@ -158,16 +160,14 @@ async def _poll_render(
                 file_size_bytes=data.get("file_size"),
                 format=format_,
             )
-        if status == "failed":
+        if render_status == "failed":
             raise CreatomateAPIError(
                 f"Creatomate render {render_id} a échoué : {data.get('error_message')}"
             )
 
         logger.debug(
             "Creatomate polling render=%s status=%s elapsed=%.0fs",
-            render_id,
-            status,
-            elapsed,
+            render_id, render_status, elapsed,
         )
         await asyncio.sleep(settings.CREATOMATE_POLLING_INTERVAL)
         elapsed += settings.CREATOMATE_POLLING_INTERVAL
@@ -177,42 +177,128 @@ async def _poll_render(
     )
 
 
-def _build_render_payload(request: CreatomateRenderRequest, settings: Settings) -> dict:
+def _build_source_payload(request: CreatomateRenderRequest) -> dict:
     """
-    Construit le payload JSON pour l'API Creatomate.
-    Inclut la conversion des timestamps ElevenLabs en sous-titres animés.
+    Construit le payload Creatomate avec une composition JSON dynamique (approche "source").
+
+    Structure des tracks :
+      1 — Fond noir (rectangle)
+      2 — Clips vidéo séquentiels (un élément par clip)
+      3 — Voix off (audio ElevenLabs)
+      4 — Musique de fond (optionnel, 15% volume)
+      5 — Logo overlay (optionnel)
+      6 — CTA texte (optionnel)
     """
-    modifications: dict = {}
+    width, height = _DIMENSIONS.get(request.format, (1080, 1920))
+    elements: list[dict] = []
 
-    for i, clip in enumerate(request.clips):
-        modifications[f"clip_{i + 1}"] = clip.url
+    # ── Track 1 : Fond noir ───────────────────────────────────────────────────
+    elements.append({
+        "type": "shape",
+        "shape": "rectangle",
+        "track": 1,
+        "fill_color": "#000000",
+        "width": "100%",
+        "height": "100%",
+        "x": "50%",
+        "y": "50%",
+        "x_anchor": "50%",
+        "y_anchor": "50%",
+    })
 
-    modifications["voiceover"] = request.audio_url
+    # ── Track 2 : Clips vidéo séquentiels ────────────────────────────────────
+    time_offset = 0.0
+    valid_clips = 0
+    for clip in sorted(request.clips, key=lambda c: c.section_id):
+        if not clip.url:
+            # Clip vide (fallback Kling/Pexels échoué) — avancer le curseur quand même
+            logger.warning("Clip section=%d sans URL — segment noir dans la vidéo", clip.section_id)
+            time_offset += clip.duration_seconds
+            continue
+        elements.append({
+            "type": "video",
+            "track": 2,
+            "time": round(time_offset, 3),
+            "duration": clip.duration_seconds,
+            "source": clip.url,
+            "fit": "cover",
+            "volume": "0%",  # Couper le son des clips — seul la voix off compte
+            "width": "100%",
+            "height": "100%",
+            "x": "50%",
+            "y": "50%",
+            "x_anchor": "50%",
+            "y_anchor": "50%",
+        })
+        time_offset += clip.duration_seconds
+        valid_clips += 1
 
-    if request.logo_url:
-        modifications["logo"] = request.logo_url
-    if request.cta_text:
-        modifications["cta_text"] = request.cta_text
+    logger.info(
+        "Creatomate source : %d clips valides / %d total | durée clips %.1fs",
+        valid_clips, len(request.clips), time_offset,
+    )
+
+    # ── Track 3 : Voix off ────────────────────────────────────────────────────
+    elements.append({
+        "type": "audio",
+        "track": 3,
+        "source": request.audio_url,
+        "audio_fade_out": 0.5,
+    })
+
+    # ── Track 4 : Musique de fond (optionnel) ─────────────────────────────────
     if request.music_url:
-        modifications["music"] = request.music_url
+        elements.append({
+            "type": "audio",
+            "track": 4,
+            "source": request.music_url,
+            "volume": "15%",
+            "audio_fade_in": 1.0,
+            "audio_fade_out": 2.0,
+        })
 
-    if request.timestamps:
-        modifications["subtitles"] = _timestamps_to_creatomate_subtitles(request.timestamps)
+    # ── Track 5 : Logo overlay (optionnel, coin haut-gauche) ─────────────────
+    if request.logo_url:
+        elements.append({
+            "type": "image",
+            "track": 5,
+            "source": request.logo_url,
+            "width": "20%",
+            "height": "auto",
+            "x": "5%",
+            "y": "5%",
+            "x_anchor": "0%",
+            "y_anchor": "0%",
+        })
 
-    return {"template_id": request.template_id, "modifications": modifications}
+    # ── Track 6 : CTA texte (optionnel, dernières 3s) ─────────────────────────
+    if request.cta_text:
+        cta_duration = 3.0
+        cta_time = max(0.0, time_offset - cta_duration) if time_offset > cta_duration else 0.0
+        elements.append({
+            "type": "text",
+            "track": 6,
+            "text": request.cta_text,
+            "font_family": "Montserrat",
+            "font_size": "8 vmin",
+            "font_weight": "700",
+            "fill_color": "#FFFFFF",
+            "stroke_color": "#000000",
+            "stroke_width": "0.5 vmin",
+            "x": "50%",
+            "y": "85%",
+            "width": "85%",
+            "x_anchor": "50%",
+            "y_anchor": "50%",
+            "text_align": "center",
+            "time": cta_time,
+            "duration": cta_duration,
+        })
 
-
-def _timestamps_to_creatomate_subtitles(timestamps: list[WordTimestamp]) -> list[dict]:
-    """
-    Convertit les timestamps ElevenLabs [{word, start_ms, end_ms}]
-    en éléments texte Creatomate avec animations entrée/sortie synchronisées.
-    PRD §4.4 : "Chaque mot apparaît exactement au moment où il est prononcé."
-    """
-    return [
-        {
-            "text": ts.word,
-            "time": ts.start_ms / 1000.0,
-            "duration": (ts.end_ms - ts.start_ms) / 1000.0,
-        }
-        for ts in timestamps
-    ]
+    return {"source": {
+        "output_format": "mp4",
+        "width": width,
+        "height": height,
+        "frame_rate": 25,
+        "elements": elements,
+    }}

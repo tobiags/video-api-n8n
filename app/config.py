@@ -71,9 +71,9 @@ class Settings(BaseSettings):
     # ── Creatomate ───────────────────────────────────────────────────────────
     CREATOMATE_API_KEY: SecretStr = Field(...)
     CREATOMATE_BASE_URL: str = "https://api.creatomate.com/v1"
-    # Templates à créer dans le dashboard Creatomate (PRD §4.4)
-    CREATOMATE_TEMPLATE_VERTICAL: str = Field(..., description="Template ID 9:16 vertical_ad")
-    CREATOMATE_TEMPLATE_HORIZONTAL: str = Field(..., description="Template ID 16:9 horizontal_ad")
+    # Plus utilisés — on passe à l'approche "source" dynamique (pas de templates statiques)
+    CREATOMATE_TEMPLATE_VERTICAL: str = Field("", description="Obsolète — approche source dynamique")
+    CREATOMATE_TEMPLATE_HORIZONTAL: str = Field("", description="Obsolète — approche source dynamique")
     CREATOMATE_POLLING_INTERVAL: float = 15.0
     CREATOMATE_RENDER_TIMEOUT: int = 900  # 15 min max
     CREATOMATE_MAX_RETRIES: int = 2
