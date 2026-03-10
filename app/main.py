@@ -17,9 +17,11 @@ plusieurs workers Gunicorn et la persistance après redémarrage.
 import asyncio
 import hmac
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
@@ -31,6 +33,7 @@ import httpx
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import Settings, get_settings
 from app.errors import AuthenticationError, JobNotFoundError, register_exception_handlers
@@ -191,6 +194,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # ── Routes ───────────────────────────────────────────────────────────────
     app.include_router(_build_router())
+
+    # ── Fichiers audio statiques (accessibles par Creatomate via URL publique) ─
+    os.makedirs("/tmp/videogen/audio", exist_ok=True)
+    app.mount("/audio", StaticFiles(directory="/tmp/videogen/audio"), name="audio")
 
     return app
 
@@ -430,6 +437,15 @@ async def run_pipeline(
                 settings=settings,
             )
             job.elevenlabs_result = elevenlabs_result
+
+            # Convertir le chemin local en URL publique pour Creatomate
+            if settings.API_BASE_URL:
+                audio_filename = Path(elevenlabs_result.audio_path).name
+                elevenlabs_result.audio_path = (
+                    f"{settings.API_BASE_URL.rstrip('/')}/audio/{audio_filename}"
+                )
+                logger.info("Job %s | Audio URL Creatomate : %s", job_id, elevenlabs_result.audio_path)
+
             logger.info(
                 "Job %s | ElevenLabs OK : durée audio %.1fs | %d mots timestampés",
                 job_id,

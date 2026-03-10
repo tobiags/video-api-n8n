@@ -135,6 +135,11 @@ class Settings(BaseSettings):
     # ── Logo ─────────────────────────────────────────────────────────────────
     LOGO_URL: str | None = None  # URL publique du logo intégré par Creatomate
 
+    # ── URL publique de l'API ─────────────────────────────────────────────────
+    # Nécessaire pour construire les URLs audio accessibles par Creatomate.
+    # Ex: "http://ys4o0cosg48gk0o4g4o8o4kw.95.217.220.12.sslip.io"
+    API_BASE_URL: str = ""
+
     # ── Validators ───────────────────────────────────────────────────────────
     @field_validator("ENVIRONMENT", mode="before")
     @classmethod
