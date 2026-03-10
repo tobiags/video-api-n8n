@@ -22,8 +22,8 @@ from app.models import ElevenLabsResult, WordTimestamp
 
 logger = logging.getLogger(__name__)
 
-# Audio storage directory on VPS (override in tests via monkeypatch)
-AUDIO_STORAGE_DIR = "/opt/videogen/audio"
+# Audio storage directory — /tmp toujours accessible en écriture dans Docker
+AUDIO_STORAGE_DIR = os.environ.get("AUDIO_STORAGE_DIR", "/tmp/videogen/audio")
 
 
 async def generate_voiceover(
