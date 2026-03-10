@@ -101,7 +101,13 @@ async def pexels_search(
         if not videos:
             return None
         best = videos[0]
-        file_url = best["video_files"][0]["link"]
+        video_files = best.get("video_files", [])
+        mp4_files = sorted(
+            [f for f in video_files if f.get("file_type") == "video/mp4" and f.get("link")],
+            key=lambda f: (f.get("width", 0) or 0) * (f.get("height", 0) or 0),
+            reverse=True,
+        )
+        file_url = mp4_files[0]["link"] if mp4_files else ""
         return VideoClip(section_id=section.id, source=ClipSource.PEXELS,
                          url=file_url, duration_seconds=float(best.get("duration", 5)),
                          keywords_used=section.keywords)
