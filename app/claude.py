@@ -29,6 +29,10 @@ RÈGLES STRICTES :
 2. La somme de toutes les durées doit être exactement égale à {total_duration} secondes
 3. Chaque broll_prompt doit inclure le ratio {aspect_ratio}, le style visuel, l'action et le cadrage
 4. Retourne UNIQUEMENT un objet JSON valide, sans markdown, sans commentaires
+5. Les keywords DOIVENT être en ANGLAIS et décrire précisément la SCÈNE VISUELLE pour une recherche
+   stock vidéo Pexels. Sois spécifique et cohérent avec le sujet exact du script.
+   ✓ CORRECT   : ["luxury apartment interior tour", "couple signing lease contract", "real estate agent showing home"]
+   ✗ INTERDIT  : ["appartement", "gens", "immobilier", "product", "person", "happy", "lifestyle"]
 
 SCHÉMA JSON REQUIS :
 {{
@@ -41,7 +45,7 @@ SCHÉMA JSON REQUIS :
       "end": <int secondes>,
       "duration": <int secondes>,
       "broll_prompt": "<prompt Kling complet avec ratio {aspect_ratio}>",
-      "keywords": ["<mot-clé1>", "<mot-clé2>"],
+      "keywords": ["<english specific visual scene 1>", "<english specific visual scene 2>", "<english specific visual scene 3>"],
       "scene_type": "<emotion|product|testimonial|cta|ambient|tutorial>"
     }}
   ]
