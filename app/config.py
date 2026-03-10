@@ -70,7 +70,7 @@ class Settings(BaseSettings):
 
     # ── Creatomate ───────────────────────────────────────────────────────────
     CREATOMATE_API_KEY: SecretStr = Field(...)
-    CREATOMATE_BASE_URL: str = "https://api.creatomate.com/v1"
+    CREATOMATE_BASE_URL: str = "https://api.creatomate.com/v2"
     # Plus utilisés — on passe à l'approche "source" dynamique (pas de templates statiques)
     CREATOMATE_TEMPLATE_VERTICAL: str = Field("", description="Obsolète — approche source dynamique")
     CREATOMATE_TEMPLATE_HORIZONTAL: str = Field("", description="Obsolète — approche source dynamique")

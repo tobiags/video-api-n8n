@@ -179,110 +179,90 @@ async def _poll_render(
 
 def _build_source_payload(request: CreatomateRenderRequest) -> dict:
     """
-    Construit le payload Creatomate avec une composition JSON dynamique (approche "source").
+    Construit le payload RenderScript Creatomate /v2/renders.
+
+    Doc : https://creatomate.com/docs/api/quick-start/synchronize-multiple-elements
+    Format : {output_format, width, height, elements} à la racine (PAS de wrapper "source").
+    Clips sur le même track → lecture séquentielle automatique (pas de time offset manuel).
 
     Structure des tracks :
-      1 — Fond noir (rectangle)
-      2 — Clips vidéo séquentiels (un élément par clip)
-      3 — Voix off (audio ElevenLabs)
-      4 — Musique de fond (optionnel, 15% volume)
-      5 — Logo overlay (optionnel)
-      6 — CTA texte (optionnel)
+      1 — Clips vidéo séquentiels (même track = auto-séquentiel)
+      2 — Voix off (audio ElevenLabs, duration=null → s'adapte à la composition)
+      3 — Musique de fond (optionnel, 15% volume)
+      4 — Logo overlay (optionnel)
+      5 — CTA texte (optionnel)
     """
     width, height = _DIMENSIONS.get(request.format, (1080, 1920))
     elements: list[dict] = []
 
-    # ── Track 1 : Fond noir ───────────────────────────────────────────────────
-    elements.append({
-        "type": "shape",
-        "shape": "rectangle",
-        "track": 1,
-        "fill_color": "#000000",
-        "width": "100%",
-        "height": "100%",
-        "x": "50%",
-        "y": "50%",
-        "x_anchor": "50%",
-        "y_anchor": "50%",
-    })
-
-    # ── Track 2 : Clips vidéo séquentiels ────────────────────────────────────
-    time_offset = 0.0
+    # ── Track 1 : Clips vidéo séquentiels ────────────────────────────────────
+    # Même track = Creatomate les joue dans l'ordre sans time offset manuel.
     valid_clips = 0
     for clip in sorted(request.clips, key=lambda c: c.section_id):
         if not clip.url:
-            # Clip vide (fallback Kling/Pexels échoué) — avancer le curseur quand même
-            logger.warning("Clip section=%d sans URL — segment noir dans la vidéo", clip.section_id)
-            time_offset += clip.duration_seconds
+            logger.warning("Clip section=%d sans URL — ignoré", clip.section_id)
             continue
         elements.append({
             "type": "video",
-            "track": 2,
-            "time": round(time_offset, 3),
-            "duration": clip.duration_seconds,
+            "track": 1,
             "source": clip.url,
             "fit": "cover",
-            "volume": "0%",  # Couper le son des clips — seul la voix off compte
-            "width": "100%",
-            "height": "100%",
-            "x": "50%",
-            "y": "50%",
-            "x_anchor": "50%",
-            "y_anchor": "50%",
+            "volume": "0%",  # Muet — seule la voix off compte
         })
-        time_offset += clip.duration_seconds
         valid_clips += 1
 
     logger.info(
-        "Creatomate source : %d clips valides / %d total | durée clips %.1fs",
-        valid_clips, len(request.clips), time_offset,
+        "Creatomate payload : %d clips valides / %d total",
+        valid_clips, len(request.clips),
     )
 
-    # ── Track 3 : Voix off ────────────────────────────────────────────────────
+    # ── Track 2 : Voix off ────────────────────────────────────────────────────
+    # duration=null → s'adapte à la longueur totale de la composition
     elements.append({
         "type": "audio",
-        "track": 3,
+        "track": 2,
         "source": request.audio_url,
+        "duration": None,
         "audio_fade_out": 0.5,
     })
 
-    # ── Track 4 : Musique de fond (optionnel) ─────────────────────────────────
+    # ── Track 3 : Musique de fond (optionnel) ─────────────────────────────────
     if request.music_url:
         elements.append({
             "type": "audio",
-            "track": 4,
+            "track": 3,
             "source": request.music_url,
+            "duration": None,
             "volume": "15%",
             "audio_fade_in": 1.0,
             "audio_fade_out": 2.0,
         })
 
-    # ── Track 5 : Logo overlay (optionnel, coin haut-gauche) ─────────────────
+    # ── Track 4 : Logo overlay (optionnel, coin haut-gauche) ─────────────────
     if request.logo_url:
         elements.append({
             "type": "image",
-            "track": 5,
+            "track": 4,
             "source": request.logo_url,
+            "fit": "contain",
             "width": "20%",
-            "height": "auto",
+            "height": "10%",
             "x": "5%",
             "y": "5%",
             "x_anchor": "0%",
             "y_anchor": "0%",
         })
 
-    # ── Track 6 : CTA texte (optionnel, dernières 3s) ─────────────────────────
+    # ── Track 5 : CTA texte (optionnel) ──────────────────────────────────────
     if request.cta_text:
-        cta_duration = 3.0
-        cta_time = max(0.0, time_offset - cta_duration) if time_offset > cta_duration else 0.0
         elements.append({
             "type": "text",
-            "track": 6,
+            "track": 5,
             "text": request.cta_text,
             "font_family": "Montserrat",
             "font_size": "8 vmin",
             "font_weight": "700",
-            "fill_color": "#FFFFFF",
+            "fill_color": "#ffffff",
             "stroke_color": "#000000",
             "stroke_width": "0.5 vmin",
             "x": "50%",
@@ -291,14 +271,13 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
             "x_anchor": "50%",
             "y_anchor": "50%",
             "text_align": "center",
-            "time": cta_time,
-            "duration": cta_duration,
         })
 
-    return {"source": {
+    # ── Payload racine (format RenderScript /v2) ──────────────────────────────
+    return {
         "output_format": "mp4",
         "width": width,
         "height": height,
         "frame_rate": 25,
         "elements": elements,
-    }}
+    }
