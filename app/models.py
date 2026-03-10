@@ -67,7 +67,7 @@ class SheetsRow(BaseModel):
     script: str = Field(..., min_length=50, description="Script publicitaire complet")
     format: VideoFormat = VideoFormat.VERTICAL
     strategy: GenerationStrategy = GenerationStrategy.A
-    duration: int = Field(90, ge=30, le=300, description="Durée cible en secondes (90/120/180)")
+    duration: int = Field(60, ge=15, le=90, description="Durée cible en secondes (15–90s, libre)")
     voice_id: str = Field(..., description="ID du clone vocal ElevenLabs pour cette campagne")
     music_url: str | None = Field(None, description="URL de la musique de fond")
     cta: str = Field("", max_length=200, description="Texte du call-to-action final")
@@ -76,7 +76,7 @@ class SheetsRow(BaseModel):
     @field_validator("duration")
     @classmethod
     def validate_duration(cls, v: int) -> int:
-        # Toute valeur entre 30s et 300s est acceptée (Field ge=30/le=300 gère déjà la plage)
+        # Toute valeur entre 15s et 90s est acceptée — le client choisit librement
         return v
 
     @property
