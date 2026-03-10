@@ -170,7 +170,7 @@ async def _poll_render(
                 f"Creatomate render {render_id} a échoué : {data.get('error_message')}"
             )
 
-        logger.debug(
+        logger.info(
             "Creatomate polling render=%s status=%s elapsed=%.0fs",
             render_id, render_status, elapsed,
         )
