@@ -59,6 +59,7 @@ from app.elevenlabs import generate_voiceover
 from app.kling import generate_clips
 from app.library import select_library_clips
 from app.creatomate import assemble_video
+from app.voices import VoiceInfo, fetch_voice_info, list_catalog_voices
 
 logger = logging.getLogger(__name__)
 
@@ -329,6 +330,45 @@ def _build_router():
             created_at=job.created_at,
             updated_at=job.updated_at,
         )
+
+    # ── Catalogue des voix ElevenLabs ────────────────────────────────────────
+    @router.get(
+        "/voices",
+        response_model=list[VoiceInfo],
+        summary="Catalogue des voix ElevenLabs disponibles",
+        description=(
+            "Retourne les métadonnées (nom, genre, accent, description, preview) "
+            "de toutes les voix référencées dans voices_catalog.json. "
+            "Trier : femmes en premier, voix indisponibles en bas."
+        ),
+        tags=["Voix"],
+    )
+    async def get_voices(
+        request: Request,
+        _: SecureEndpoint,
+        settings: Settings = Depends(get_settings),
+    ) -> list[VoiceInfo]:
+        http_client: httpx.AsyncClient = request.app.state.http_client
+        return await list_catalog_voices(http_client, settings)
+
+    @router.get(
+        "/voices/{voice_id}",
+        response_model=VoiceInfo,
+        summary="Vérifier une voix ElevenLabs par ID",
+        description=(
+            "Vérifie et retourne les métadonnées d'une voix ElevenLabs par son ID. "
+            "Utile pour valider un nouvel ID envoyé par le client avant de l'ajouter au catalogue."
+        ),
+        tags=["Voix"],
+    )
+    async def get_voice(
+        voice_id: str,
+        request: Request,
+        _: SecureEndpoint,
+        settings: Settings = Depends(get_settings),
+    ) -> VoiceInfo:
+        http_client: httpx.AsyncClient = request.app.state.http_client
+        return await fetch_voice_info(voice_id, http_client, settings)
 
     # ── Dashboard de monitoring ───────────────────────────────────────────────
     @router.get(
