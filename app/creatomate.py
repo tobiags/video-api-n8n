@@ -120,8 +120,13 @@ async def _submit_render(
         raise CreatomateAPIError(
             f"Creatomate API {resp.status_code} : {resp.text[:300]}"
         )
-    renders = resp.json()
-    render_id = renders[0]["id"]
+    render = resp.json()
+    # Response is a single dict — some doc examples use "id", others "render_id"
+    render_id = render.get("id") or render.get("render_id")
+    if not render_id:
+        raise CreatomateAPIError(
+            f"Réponse Creatomate sans id : {str(render)[:300]}"
+        )
     n_clips = sum(1 for c in request.clips if c.url)
     logger.info(
         "Creatomate render soumis : render_id=%s | %d clips | audio=%s",
