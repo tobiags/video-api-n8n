@@ -289,5 +289,6 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
         "elements": elements,
     }
     if request.target_duration_seconds:
-        payload["duration"] = round(request.target_duration_seconds, 2)
+        # +2.0s buffer: last video clip continues 2s after voiceover ends (avoids hard cut on final word)
+        payload["duration"] = round(request.target_duration_seconds + 2.0, 2)
     return payload

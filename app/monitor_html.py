@@ -1,6 +1,7 @@
 """
 monitor_html.py — HTML du dashboard de monitoring VideoGen
 Servi par GET /monitor dans main.py
+Onglets : Jobs (pipeline) | Voix (catalogue ElevenLabs)
 """
 
 MONITOR_HTML = """<!DOCTYPE html>
@@ -30,6 +31,7 @@ MONITOR_HTML = """<!DOCTYPE html>
     ::-webkit-scrollbar { width:6px; height:6px; }
     ::-webkit-scrollbar-track { background:#111827; }
     ::-webkit-scrollbar-thumb { background:#374151; border-radius:3px; }
+    audio { width:100%; height:32px; }
   </style>
 </head>
 <body class="text-gray-100 min-h-screen font-sans">
@@ -57,68 +59,122 @@ MONITOR_HTML = """<!DOCTYPE html>
       </button>
     </div>
   </div>
+
+  <!-- TABS NAV -->
+  <div class="max-w-5xl mx-auto px-4 pb-2 pt-1 flex gap-1">
+    <button id="tab-btn-jobs" onclick="switchTab('jobs')"
+      class="px-5 py-1.5 rounded-lg text-sm font-semibold transition-all bg-gray-700 text-white border border-gray-600">
+      🎬 Jobs
+    </button>
+    <button id="tab-btn-voix" onclick="switchTab('voix')"
+      class="px-5 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-gray-200 border border-transparent">
+      🎙️ Voix
+    </button>
+  </div>
 </header>
 
-<!-- AUTH BANNER -->
-<div id="auth-banner" class="hidden max-w-5xl mx-auto px-4 mt-6">
-  <div class="bg-amber-950/50 border border-amber-800 rounded-xl p-5">
-    <p class="text-amber-300 font-semibold mb-1">🔑 Authentification requise</p>
-    <p class="text-amber-400/70 text-sm mb-3">
-      Entrez votre clé API (valeur de <code class="bg-amber-900/50 px-1 rounded">API_SECRET_KEY</code>)
-      ou accédez via <code class="bg-amber-900/50 px-1 rounded">/monitor?key=VOTRE_CLE</code>
-    </p>
-    <div class="flex gap-2">
-      <input id="api-key-input" type="password" placeholder="Clé API secrète…"
-        class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm
-               text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30">
-      <button onclick="saveKey()"
-        class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
-        Connexion
-      </button>
-    </div>
-  </div>
-</div>
+<!-- ══════════════════ TAB : JOBS ══════════════════ -->
+<div id="tab-jobs">
 
-<!-- MAIN -->
-<main class="max-w-5xl mx-auto px-4 py-6">
-
-  <!-- Stats -->
-  <div id="stats-bar" class="hidden grid grid-cols-4 gap-3 mb-6">
-    <div class="bg-gray-800/80 border border-gray-700 rounded-xl p-4 text-center">
-      <div id="stat-total" class="text-3xl font-bold text-white">—</div>
-      <div class="text-xs text-gray-500 mt-1">Total</div>
-    </div>
-    <div class="bg-green-950/50 border border-green-800/60 rounded-xl p-4 text-center">
-      <div id="stat-done" class="text-3xl font-bold text-green-400">—</div>
-      <div class="text-xs text-gray-500 mt-1">Terminés</div>
-    </div>
-    <div class="bg-blue-950/50 border border-blue-800/60 rounded-xl p-4 text-center">
-      <div id="stat-running" class="text-3xl font-bold text-blue-400">—</div>
-      <div class="text-xs text-gray-500 mt-1">En cours</div>
-    </div>
-    <div class="bg-red-950/50 border border-red-800/60 rounded-xl p-4 text-center">
-      <div id="stat-failed" class="text-3xl font-bold text-red-400">—</div>
-      <div class="text-xs text-gray-500 mt-1">Échoués</div>
+  <!-- AUTH BANNER -->
+  <div id="auth-banner" class="hidden max-w-5xl mx-auto px-4 mt-6">
+    <div class="bg-amber-950/50 border border-amber-800 rounded-xl p-5">
+      <p class="text-amber-300 font-semibold mb-1">🔑 Authentification requise</p>
+      <p class="text-amber-400/70 text-sm mb-3">
+        Entrez votre clé API (valeur de <code class="bg-amber-900/50 px-1 rounded">API_SECRET_KEY</code>)
+        ou accédez via <code class="bg-amber-900/50 px-1 rounded">/monitor?key=VOTRE_CLE</code>
+      </p>
+      <div class="flex gap-2">
+        <input id="api-key-input" type="password" placeholder="Clé API secrète…"
+          class="flex-1 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm
+                 text-white placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/30">
+        <button onclick="saveKey()"
+          class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
+          Connexion
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Loading -->
-  <div id="loading-state" class="text-center py-20 text-gray-600">
+  <!-- MAIN JOBS -->
+  <main class="max-w-5xl mx-auto px-4 py-6">
+
+    <!-- Stats -->
+    <div id="stats-bar" class="hidden grid grid-cols-4 gap-3 mb-6">
+      <div class="bg-gray-800/80 border border-gray-700 rounded-xl p-4 text-center">
+        <div id="stat-total" class="text-3xl font-bold text-white">—</div>
+        <div class="text-xs text-gray-500 mt-1">Total</div>
+      </div>
+      <div class="bg-green-950/50 border border-green-800/60 rounded-xl p-4 text-center">
+        <div id="stat-done" class="text-3xl font-bold text-green-400">—</div>
+        <div class="text-xs text-gray-500 mt-1">Terminés</div>
+      </div>
+      <div class="bg-blue-950/50 border border-blue-800/60 rounded-xl p-4 text-center">
+        <div id="stat-running" class="text-3xl font-bold text-blue-400">—</div>
+        <div class="text-xs text-gray-500 mt-1">En cours</div>
+      </div>
+      <div class="bg-red-950/50 border border-red-800/60 rounded-xl p-4 text-center">
+        <div id="stat-failed" class="text-3xl font-bold text-red-400">—</div>
+        <div class="text-xs text-gray-500 mt-1">Échoués</div>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading-state" class="text-center py-20 text-gray-600">
+      <div class="text-5xl mb-4 pulse">⏳</div>
+      <p class="text-lg">Chargement des jobs…</p>
+    </div>
+
+    <!-- No jobs -->
+    <div id="no-jobs" class="hidden text-center py-20 text-gray-600">
+      <div class="text-5xl mb-4">📭</div>
+      <p class="text-lg font-medium text-gray-500">Aucun job pour l'instant</p>
+      <p class="text-sm mt-2">Lance une génération depuis Google Sheets (Statut = ok)</p>
+    </div>
+
+    <!-- Jobs list -->
+    <div id="jobs-container"></div>
+
+  </main>
+
+</div><!-- /tab-jobs -->
+
+<!-- ══════════════════ TAB : VOIX ══════════════════ -->
+<div id="tab-voix" class="hidden max-w-5xl mx-auto px-4 py-6">
+
+  <!-- Instructions -->
+  <div class="bg-gray-800/40 border border-gray-700 rounded-2xl p-5 mb-6 text-sm text-gray-400 leading-relaxed">
+    <p class="font-semibold text-gray-200 mb-2">📋 Comment utiliser ce catalogue</p>
+    <ol class="list-decimal list-inside space-y-1">
+      <li>Écoute chaque voix avec le lecteur audio ▶</li>
+      <li>Clique <strong class="text-gray-200">Copier ID</strong> sur la voix choisie</li>
+      <li>Colle l'ID dans la colonne <strong class="text-gray-200">Voix (col F)</strong> du Google Sheet</li>
+    </ol>
+  </div>
+
+  <!-- Loading state -->
+  <div id="voices-loading" class="text-center py-20 text-gray-600">
     <div class="text-5xl mb-4 pulse">⏳</div>
-    <p class="text-lg">Chargement des jobs…</p>
+    <p class="text-lg">Chargement des voix…</p>
   </div>
 
-  <!-- No jobs -->
-  <div id="no-jobs" class="hidden text-center py-20 text-gray-600">
-    <div class="text-5xl mb-4">📭</div>
-    <p class="text-lg font-medium text-gray-500">Aucun job pour l'instant</p>
-    <p class="text-sm mt-2">Lance une génération depuis Google Sheets (Statut = ok)</p>
+  <!-- Auth required for voices -->
+  <div id="voices-auth" class="hidden text-center py-20 text-gray-600">
+    <div class="text-5xl mb-4">🔑</div>
+    <p class="text-lg">Connecte-toi d'abord depuis l'onglet <strong>Jobs</strong></p>
   </div>
 
-  <!-- Jobs list -->
-  <div id="jobs-container"></div>
+  <!-- Voices grid -->
+  <div id="voices-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
 
-</main>
+  <!-- Add voice info -->
+  <div id="voices-add" class="hidden mt-6 bg-gray-800/40 border border-gray-700/60 border-dashed rounded-2xl p-5 text-sm text-gray-500 text-center">
+    Pour ajouter une voix : mettre son ID dans
+    <code class="bg-gray-800 px-1.5 py-0.5 rounded text-gray-400">app/voices_catalog.json</code>
+    puis redéployer.
+  </div>
+
+</div><!-- /tab-voix -->
 
 <script>
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -129,6 +185,18 @@ let refreshTimer = null;
 // Lire la clé depuis ?key=
 const urlKey = new URLSearchParams(window.location.search).get('key');
 if (urlKey) { apiKey = urlKey; localStorage.setItem('videogen_api_key', apiKey); }
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+const TAB_ACTIVE   = 'px-5 py-1.5 rounded-lg text-sm font-semibold transition-all bg-gray-700 text-white border border-gray-600';
+const TAB_INACTIVE = 'px-5 py-1.5 rounded-lg text-sm font-semibold transition-all text-gray-500 hover:text-gray-200 border border-transparent';
+
+function switchTab(tab) {
+  document.getElementById('tab-jobs').classList.toggle('hidden', tab !== 'jobs');
+  document.getElementById('tab-voix').classList.toggle('hidden', tab !== 'voix');
+  document.getElementById('tab-btn-jobs').className = tab === 'jobs' ? TAB_ACTIVE : TAB_INACTIVE;
+  document.getElementById('tab-btn-voix').className = tab === 'voix' ? TAB_ACTIVE : TAB_INACTIVE;
+  if (tab === 'voix') loadVoices();
+}
 
 // ── Étapes du pipeline ──────────────────────────────────────────────────────
 const STEPS = [
@@ -392,7 +460,130 @@ function saveKey() {
   loadJobs();
 }
 
-// Actualisation auto toutes les 5s
+// ── VOIX — Chargement ────────────────────────────────────────────────────────
+let voicesLoaded = false;
+
+async function loadVoices() {
+  if (voicesLoaded) return;
+
+  if (!apiKey) {
+    document.getElementById('voices-loading').classList.add('hidden');
+    document.getElementById('voices-auth').classList.remove('hidden');
+    return;
+  }
+
+  try {
+    const r = await fetch(`${API_URL}/voices`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (r.status === 401) {
+      document.getElementById('voices-loading').classList.add('hidden');
+      document.getElementById('voices-auth').classList.remove('hidden');
+      return;
+    }
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+    const voices = await r.json();
+    voicesLoaded = true;
+    document.getElementById('voices-loading').classList.add('hidden');
+    const grid = document.getElementById('voices-grid');
+    grid.classList.remove('hidden');
+    grid.innerHTML = voices.map(renderVoice).join('');
+    document.getElementById('voices-add').classList.remove('hidden');
+  } catch(e) {
+    document.getElementById('voices-loading').innerHTML =
+      `<div class="text-center py-20">
+         <div class="text-5xl mb-4">⚠️</div>
+         <p class="text-red-400 text-lg">Erreur de chargement</p>
+         <p class="text-gray-600 text-sm mt-2">${e.message}</p>
+         <button onclick="voicesLoaded=false; loadVoices()"
+           class="mt-4 text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-2 rounded-lg border border-gray-600">
+           Réessayer
+         </button>
+       </div>`;
+  }
+}
+
+// ── VOIX — Rendu d'une carte ──────────────────────────────────────────────────
+function renderVoice(v) {
+  const genderBadge = v.gender === 'female'
+    ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-pink-900/60 text-pink-300 border border-pink-700/60">🚺 Femme</span>'
+    : v.gender === 'male'
+    ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-900/60 text-blue-300 border border-blue-700/60">🚹 Homme</span>'
+    : '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-gray-700 text-gray-400 border border-gray-600">❓ Inconnu</span>';
+
+  const unavailableBanner = !v.available
+    ? `<div class="mb-3 bg-red-950/60 border border-red-800/50 rounded-xl px-3 py-2 text-xs text-red-400">
+         ⚠️ Voix inaccessible avec la clé API actuelle
+       </div>` : '';
+
+  const audioPlayer = v.preview_url
+    ? `<div class="mt-3">
+         <p class="text-[10px] text-gray-600 mb-1 uppercase tracking-wide font-semibold">Aperçu</p>
+         <audio controls preload="none"
+           class="w-full rounded-lg overflow-hidden"
+           style="height:36px; filter:brightness(0.8) contrast(1.2);">
+           <source src="${v.preview_url}" type="audio/mpeg">
+         </audio>
+       </div>`
+    : `<div class="mt-3 text-[11px] text-gray-600 italic">Pas d'aperçu disponible</div>`;
+
+  const metaParts = [];
+  if (v.accent)      metaParts.push(`🌍 ${v.accent}`);
+  if (v.age)         metaParts.push(`🗓️ ${v.age}`);
+  if (v.use_case)    metaParts.push(`💼 ${v.use_case}`);
+  if (v.description) metaParts.push(`💬 ${v.description}`);
+  const metaHtml = metaParts.length
+    ? `<div class="space-y-0.5 mt-2 mb-1">
+         ${metaParts.map(p => `<div class="text-[11px] text-gray-500">${p}</div>`).join('')}
+       </div>`
+    : '';
+
+  return `
+    <div class="bg-gray-900/80 border ${v.available ? 'border-gray-700/60 hover:border-gray-500' : 'border-red-900/60'} rounded-2xl p-4 transition-colors flex flex-col">
+      <!-- Nom + genre -->
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <div class="font-bold text-white text-base leading-tight">${v.name || '—'}</div>
+        ${genderBadge}
+      </div>
+
+      ${unavailableBanner}
+      ${metaHtml}
+      ${audioPlayer}
+
+      <!-- ID + Copier -->
+      <div class="mt-3 pt-3 border-t border-gray-800 flex items-center gap-2">
+        <code class="text-[10px] text-gray-600 font-mono flex-1 truncate bg-gray-800/80 px-2 py-1 rounded-md border border-gray-700/60"
+              title="${v.voice_id}">${v.voice_id}</code>
+        <button onclick="copyId('${v.voice_id}', this)"
+          class="shrink-0 text-[11px] bg-gray-700 hover:bg-indigo-600 text-gray-300 hover:text-white
+                 px-2.5 py-1 rounded-md border border-gray-600 hover:border-indigo-500
+                 transition-all whitespace-nowrap font-semibold">
+          Copier ID
+        </button>
+      </div>
+    </div>`;
+}
+
+// ── VOIX — Copier dans le presse-papier ──────────────────────────────────────
+function copyId(id, btn) {
+  navigator.clipboard.writeText(id).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copié !';
+    btn.classList.add('bg-green-700', 'border-green-600', 'text-green-100');
+    btn.classList.remove('bg-gray-700', 'border-gray-600', 'text-gray-300');
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.classList.remove('bg-green-700', 'border-green-600', 'text-green-100');
+      btn.classList.add('bg-gray-700', 'border-gray-600', 'text-gray-300');
+    }, 2000);
+  }).catch(() => {
+    // Fallback si clipboard API non disponible
+    prompt('Copie manuellement cet ID :', id);
+  });
+}
+
+// Actualisation auto jobs toutes les 5s
 setInterval(loadJobs, 5000);
 loadJobs();
 </script>
