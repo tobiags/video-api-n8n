@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Retry x2 avec backoff exponentiel (PRD §5.1)
     ELEVENLABS_MAX_RETRIES: int = 2
     ELEVENLABS_BACKOFF_BASE: float = 5.0  # secondes (5s, 10s)
+    # Vitesse de lecture (0.7 = lent/posé, 1.0 = normal, 1.2 = rapide)
+    # Valeur recommandée : 0.85 pour une voix pub "posée" et professionnelle
+    ELEVENLABS_VOICE_SPEED: float = Field(0.85, ge=0.7, le=1.2)
 
     # ── Kling AI ─────────────────────────────────────────────────────────────
     KLING_ACCESS_KEY: SecretStr = Field(...)

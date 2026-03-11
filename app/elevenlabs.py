@@ -66,7 +66,11 @@ async def generate_voiceover(
                 json={
                     "text": script,
                     "model_id": settings.ELEVENLABS_MODEL_ID,
-                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.75},
+                    "voice_settings": {
+                        "stability": 0.55,        # légèrement stable = ton posé/consistant
+                        "similarity_boost": 0.75,
+                        "speed": settings.ELEVENLABS_VOICE_SPEED,  # 0.85 = voix posée (défaut)
+                    },
                 },
                 timeout=120.0,
             )
