@@ -73,6 +73,13 @@ class SheetsRow(BaseModel):
     cta: str = Field("", max_length=200, description="Texte du call-to-action final")
     logo_url: str | None = Field(None, description="Override URL logo (sinon config.py)")
 
+    # I3 fix étendu : strip \r\n et espaces sur tous les champs string venant de Sheets
+    # Google Sheets + n8n peuvent inclure des \r\n en fin de cellule (Windows CRLF)
+    @field_validator("voice_id", "script", "cta", "music_url", "logo_url", mode="before")
+    @classmethod
+    def strip_sheets_strings(cls, v: Any) -> Any:
+        return v.strip() if isinstance(v, str) else v
+
     @field_validator("duration")
     @classmethod
     def validate_duration(cls, v: int) -> int:

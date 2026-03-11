@@ -566,8 +566,18 @@ function renderVoice(v) {
 }
 
 // ── VOIX — Copier dans le presse-papier ──────────────────────────────────────
+// Utilise execCommand (compatible HTTP) plutôt que navigator.clipboard (HTTPS uniquement)
 function copyId(id, btn) {
-  navigator.clipboard.writeText(id).then(() => {
+  const el = document.createElement('textarea');
+  el.value = id;
+  el.setAttribute('readonly', '');
+  el.style.cssText = 'position:absolute;left:-9999px;top:0;opacity:0;';
+  document.body.appendChild(el);
+  el.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(el);
+
+  if (ok) {
     const orig = btn.textContent;
     btn.textContent = '✓ Copié !';
     btn.classList.add('bg-green-700', 'border-green-600', 'text-green-100');
@@ -577,10 +587,9 @@ function copyId(id, btn) {
       btn.classList.remove('bg-green-700', 'border-green-600', 'text-green-100');
       btn.classList.add('bg-gray-700', 'border-gray-600', 'text-gray-300');
     }, 2000);
-  }).catch(() => {
-    // Fallback si clipboard API non disponible
+  } else {
     prompt('Copie manuellement cet ID :', id);
-  });
+  }
 }
 
 // Actualisation auto jobs toutes les 5s

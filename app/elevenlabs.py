@@ -51,8 +51,8 @@ async def generate_voiceover(
         ElevenLabsAPIError:     Erreur API ElevenLabs après épuisement des retries
         ElevenLabsTimeoutError: Timeout après backoff exponentiel x2
     """
-    # I3 fix: fallback to default voice_id if empty/None
-    effective_voice_id = voice_id or settings.elevenlabs_default_voice_id
+    # I3 fix: fallback to default voice_id if empty/None + strip \r\n (Google Sheets CRLF)
+    effective_voice_id = (voice_id or settings.elevenlabs_default_voice_id).strip()
     last_error: Exception | None = None
 
     for attempt in range(settings.ELEVENLABS_MAX_RETRIES):
