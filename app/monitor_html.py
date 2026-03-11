@@ -281,6 +281,7 @@ function renderStep(step, state, job) {
 function statusBadge(s) {
   const map = {
     pending:            { t: 'En attente',    c: 'bg-gray-700/80 text-gray-400 border-gray-600' },
+    queued:             { t: '⏳ File d\'attente', c: 'bg-amber-800 text-amber-100 border-amber-700 pulse' },
     running_claude:     { t: '🤖 Claude…',     c: 'bg-violet-800 text-violet-100 border-violet-700 pulse' },
     running_elevenlabs: { t: '🎙️ Voix off…',   c: 'bg-purple-800 text-purple-100 border-purple-700 pulse' },
     running_clips:      { t: '🎬 Clips…',      c: 'bg-indigo-800 text-indigo-100 border-indigo-700 pulse' },
@@ -311,7 +312,7 @@ function fmtDuration(a, b) {
 function renderJob(job) {
   const stepStates = STEPS.map(s => ({ step: s, state: getStepState(s, job) }));
   const pct = job.progress?.percentage ?? 0;
-  const isRunning = !['completed','failed','pending'].includes(job.status);
+  const isRunning = !['completed','failed','pending','queued'].includes(job.status);
 
   const barCls = job.status === 'completed' ? 'bg-green-500'
                : job.status === 'failed'    ? 'bg-red-600'
@@ -429,7 +430,7 @@ async function loadJobs() {
     document.getElementById('stats-bar').classList.remove('hidden');
     document.getElementById('stat-total').textContent   = jobs.length;
     document.getElementById('stat-done').textContent    = jobs.filter(j=>j.status==='completed').length;
-    document.getElementById('stat-running').textContent = jobs.filter(j=>!['completed','failed','pending'].includes(j.status)).length;
+    document.getElementById('stat-running').textContent = jobs.filter(j=>!['completed','failed','pending','queued'].includes(j.status)).length;
     document.getElementById('stat-failed').textContent  = jobs.filter(j=>j.status==='failed').length;
 
     if (jobs.length === 0) {

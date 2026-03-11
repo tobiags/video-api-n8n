@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # NOTE: garder WORKERS=1 jusqu'au Jour 2 (Redis) — l'in-memory job store
     # n'est pas partageable entre plusieurs workers Gunicorn.
     WORKERS: int = 1
+    # Limite de pipelines en parallèle (Semaphore asyncio) — les jobs supplémentaires
+    # sont mis en file d'attente (statut QUEUED) jusqu'à la libération d'un slot.
+    # Valeur recommandée : 2 (Kling + Creatomate sont lourds en parallèle)
+    MAX_CONCURRENT_JOBS: int = Field(2, ge=1, le=5)
 
     # ── Sécurité ─────────────────────────────────────────────────────────────
     # Secret partagé entre n8n et FastAPI (header: Authorization: Bearer <token>)

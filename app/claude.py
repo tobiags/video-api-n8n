@@ -33,6 +33,19 @@ RÈGLES STRICTES :
    stock vidéo Pexels. Sois spécifique et cohérent avec le sujet exact du script.
    ✓ CORRECT   : ["luxury apartment interior tour", "couple signing lease contract", "real estate agent showing home"]
    ✗ INTERDIT  : ["appartement", "gens", "immobilier", "product", "person", "happy", "lifestyle"]
+6. COHÉRENCE VISUELLE ABSOLUE — analyse d'abord le script pour identifier :
+   - Le genre du narrateur/protagoniste (femme/homme) : pronoms (elle/il), contexte, métier
+   - Son apparence approximative : âge, style, tenue selon le contexte
+   - Le lieu précis de chaque scène
+   Puis intègre OBLIGATOIREMENT ces informations dans chaque broll_prompt ET keywords.
+   ✓ CORRECT   : "Close-up woman 28-35 smiling confidently at camera in bright modern office, {aspect_ratio}"
+   ✓ CORRECT   : "Young woman real estate agent showing apartment keys to camera, professional attire, {aspect_ratio}"
+   ✗ INTERDIT  : "person in office" / "someone signing contract" / "individual looking happy"
+   → Le genre, l'âge approximatif et l'action précise DOIVENT figurer dans chaque prompt.
+7. COHÉRENCE ENTRE broll_prompt ET keywords — les keywords doivent décrire exactement
+   la même scène que le broll_prompt (même genre, même action, même lieu).
+   ✓ CORRECT   : broll="woman signing lease", keywords=["woman signing contract desk", "female professional paperwork"]
+   ✗ INTERDIT  : broll="woman signing lease", keywords=["business", "success", "finance"]
 
 SCHÉMA JSON REQUIS :
 {{
@@ -44,8 +57,8 @@ SCHÉMA JSON REQUIS :
       "start": <int secondes>,
       "end": <int secondes>,
       "duration": <int secondes>,
-      "broll_prompt": "<prompt Kling complet avec ratio {aspect_ratio}>",
-      "keywords": ["<english specific visual scene 1>", "<english specific visual scene 2>", "<english specific visual scene 3>"],
+      "broll_prompt": "<prompt Kling : [gender] [age range] [precise action] in [specific location], [style], {aspect_ratio}>",
+      "keywords": ["<english: gender + action + location>", "<english: gender + context>", "<english: specific scene>"],
       "scene_type": "<emotion|product|testimonial|cta|ambient|tutorial>"
     }}
   ]

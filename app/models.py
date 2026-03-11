@@ -38,6 +38,7 @@ class ClipSource(str, Enum):
 class JobStatus(str, Enum):
     """États possibles d'un job de génération vidéo."""
     PENDING = "pending"
+    QUEUED = "queued"                       # En attente de slot dans la queue
     RUNNING_CLAUDE = "running_claude"
     RUNNING_ELEVENLABS = "running_elevenlabs"
     RUNNING_CLIPS = "running_clips"         # Kling / Library / Pexels
@@ -398,6 +399,9 @@ class NotificationPayload(BaseModel):
     type: NotificationType
     job_id: UUID
     row_id: str
+    # Numéro de ligne Sheets (entier) — utilisé par le workflow FINALISATION
+    # pour la mise à jour Google Sheets via matchingColumns: ["row_number"]
+    row_number: int | None = None
     message: str
     drive_url: str | None = None         # Pour type=SUCCESS
     error_detail: str | None = None      # Pour partial/blocking error

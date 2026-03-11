@@ -111,7 +111,15 @@ async def lifespan(app: FastAPI):
     # ── Job store in-memory (remplacé par Redis au Jour 2) ────────────────────
     app.state.jobs: dict[UUID, VideoJob] = {}
 
-    logger.info("Client HTTP initialisé. API prête à recevoir les requêtes n8n.")
+    # ── Semaphore de concurrence pipeline ─────────────────────────────────────
+    # Limite le nombre de pipelines actifs. Les jobs en excès sont mis en file
+    # d'attente (statut QUEUED) plutôt que lancés simultanément.
+    app.state.pipeline_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_JOBS)
+
+    logger.info(
+        "Client HTTP initialisé. File d'attente : max %d jobs parallèles. API prête.",
+        settings.MAX_CONCURRENT_JOBS,
+    )
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
@@ -462,6 +470,15 @@ async def _notify_n8n(
         logger.error("Échec notification n8n [%s]: %s", payload.type.value, e)
 
 
+def _parse_row_number(row_id: str) -> int | None:
+    """Extrait le numéro de ligne entier depuis row_id (ex: 'row_12' → 12, '12' → 12)."""
+    try:
+        cleaned = row_id.strip().removeprefix("row_")
+        return int(cleaned)
+    except (ValueError, AttributeError):
+        return None
+
+
 async def run_pipeline(
     job_id: UUID,
     app: FastAPI,
@@ -471,6 +488,7 @@ async def run_pipeline(
     Orchestrateur complet du pipeline de génération vidéo (PRD §2.1).
 
     Étapes :
+      0. Queue    → attend un slot dans le semaphore (MAX_CONCURRENT_JOBS)
       1. Claude  → découpage script + prompts B-roll (PRD §4.1)
       2. ElevenLabs → voix off + timestamps (PRD §4.2)
       3. Clips   → Kling / Library / Pexels selon stratégie (PRD §4.3 + §3)
@@ -481,9 +499,20 @@ async def run_pipeline(
     http_client: httpx.AsyncClient = app.state.http_client
     request = job.request
     row = request.sheets_row
+    row_number = _parse_row_number(row.row_id)
+
+    # ── Étape 0 : File d'attente ───────────────────────────────────────────────
+    semaphore: asyncio.Semaphore = app.state.pipeline_semaphore
+    if semaphore.locked():
+        _update_job_progress(
+            job, JobStatus.QUEUED, "En file d'attente", 2,
+            f"Slot occupé — max {settings.MAX_CONCURRENT_JOBS} pipelines en parallèle",
+        )
+        logger.info("Job %s | QUEUED — en attente d'un slot pipeline", job_id)
 
     try:
         async with asyncio.timeout(settings.HTTP_TIMEOUT_VIDEO_GEN):  # global guard — I2 resolved
+          async with semaphore:
             # ── Étape 1 : Analyse script (Claude) ─────────────────────────────────
             _update_job_progress(
                 job, JobStatus.RUNNING_CLAUDE,
@@ -610,6 +639,7 @@ async def run_pipeline(
                         type=NotificationType.SUCCESS,
                         job_id=job_id,
                         row_id=row.row_id,
+                        row_number=row_number,
                         message=f"Pub générée avec succès — durée {render_result.duration_seconds:.0f}s",
                         drive_url=render_result.video_url,
                     ),
@@ -635,6 +665,7 @@ async def run_pipeline(
                     type=NotificationType.BLOCKING_ERROR,
                     job_id=job_id,
                     row_id=row.row_id,
+                    row_number=row_number,
                     message="Timeout global du pipeline",
                     error_detail=detail,
                     affected_step=job.progress.step,
@@ -657,6 +688,7 @@ async def run_pipeline(
                     type=NotificationType.BLOCKING_ERROR,
                     job_id=job_id,
                     row_id=row.row_id,
+                    row_number=row_number,
                     message="Erreur bloquante dans le pipeline",
                     error_detail=str(exc),
                     affected_step=job.progress.step,
