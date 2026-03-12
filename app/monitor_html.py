@@ -427,7 +427,7 @@ function renderStep(step, state, job) {
 function statusBadge(s) {
   const map = {
     pending:            { t:'En attente',      border:'#E5E7EB', bg:'#F9FAFB', color:'#6B7280' },
-    queued:             { t:'File d\'attente', border:'#FCD34D', bg:'#FFFBEB', color:'#92400E', pulse:true },
+    queued:             { t:"File d'attente", border:'#FCD34D', bg:'#FFFBEB', color:'#92400E', pulse:true },
     running_claude:     { t:'Claude…',         border:'#C5C5F0', bg:'#EEF0FF', color:'#5B5BD6', pulse:true },
     running_elevenlabs: { t:'Voix off…',       border:'#D8B4FE', bg:'#F5F3FF', color:'#7C3AED', pulse:true },
     running_clips:      { t:'Clips…',          border:'#A5B4FC', bg:'#EEF2FF', color:'#4338CA', pulse:true },
