@@ -570,7 +570,7 @@ async function loadJobs() {
     const timeout = setTimeout(() => controller.abort(), 8000);
 
     const r = await fetch(`${API_URL}/jobs`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` },
+      headers: { 'X-Api-Key': apiKey },
       signal: controller.signal,
     });
     clearTimeout(timeout);

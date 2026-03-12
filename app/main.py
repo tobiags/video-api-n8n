@@ -179,7 +179,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=["http://localhost:5678", "http://127.0.0.1:5678"],  # n8n local
         allow_methods=["GET", "POST"],
-        allow_headers=["Authorization", "Content-Type"],
+        allow_headers=["Authorization", "X-Api-Key", "Content-Type"],
     )
 
     if settings.is_production:
@@ -219,16 +219,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 def _verify_api_key(
     authorization: Annotated[str | None, Header()] = None,
+    x_api_key: Annotated[str | None, Header()] = None,
     settings: Settings = Depends(get_settings),
 ) -> None:
     """
     Valide le secret partagé entre n8n et FastAPI.
-    n8n doit envoyer : Authorization: Bearer <API_SECRET_KEY>
+    Accepte deux formes :
+      - Authorization: Bearer <key>  (n8n)
+      - X-Api-Key: <key>             (monitor JS — Traefik strip Authorization)
     """
-    if not authorization:
-        raise AuthenticationError("Header Authorization manquant")
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(token, settings.api_secret_key):
+    # Extraire le token selon le header disponible
+    token: str | None = None
+    if x_api_key:
+        token = x_api_key.strip()
+    elif authorization:
+        scheme, _, t = authorization.partition(" ")
+        if scheme.lower() == "bearer":
+            token = t.strip()
+
+    if not token:
+        raise AuthenticationError("Header Authorization ou X-Api-Key manquant")
+    if not hmac.compare_digest(token, settings.api_secret_key):
         raise AuthenticationError("Token API invalide")
 
 
