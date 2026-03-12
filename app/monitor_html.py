@@ -569,8 +569,7 @@ async function loadJobs() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const r = await fetch(`${API_URL}/jobs`, {
-      headers: { 'X-Api-Key': apiKey },
+    const r = await fetch(`${API_URL}/jobs?key=${encodeURIComponent(apiKey)}`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
@@ -652,9 +651,7 @@ async function loadVoices() {
   }
 
   try {
-    const r = await fetch(`${API_URL}/voices`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
+    const r = await fetch(`${API_URL}/voices?key=${encodeURIComponent(apiKey)}`);
     if (r.status === 401) {
       document.getElementById('voices-loading').classList.add('hidden');
       document.getElementById('voices-auth').classList.remove('hidden');

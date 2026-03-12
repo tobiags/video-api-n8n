@@ -30,7 +30,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 
 import httpx
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse
@@ -220,17 +220,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def _verify_api_key(
     authorization: Annotated[str | None, Header()] = None,
     x_api_key: Annotated[str | None, Header()] = None,
+    key: Annotated[str | None, Query()] = None,
     settings: Settings = Depends(get_settings),
 ) -> None:
     """
     Valide le secret partagé entre n8n et FastAPI.
-    Accepte deux formes :
-      - Authorization: Bearer <key>  (n8n)
-      - X-Api-Key: <key>             (monitor JS — Traefik strip Authorization)
+    Accepte trois formes (priorité croissante) :
+      - Authorization: Bearer <key>   (n8n)
+      - X-Api-Key: <key>              (header custom)
+      - ?key=<key>                    (query param — monitor JS, jamais strippé par Traefik)
     """
-    # Extraire le token selon le header disponible
     token: str | None = None
-    if x_api_key:
+    if key:
+        token = key.strip()
+    elif x_api_key:
         token = x_api_key.strip()
     elif authorization:
         scheme, _, t = authorization.partition(" ")
@@ -238,7 +241,7 @@ def _verify_api_key(
             token = t.strip()
 
     if not token:
-        raise AuthenticationError("Header Authorization ou X-Api-Key manquant")
+        raise AuthenticationError("Authentification requise (header ou ?key=)")
     if not hmac.compare_digest(token, settings.api_secret_key):
         raise AuthenticationError("Token API invalide")
 
