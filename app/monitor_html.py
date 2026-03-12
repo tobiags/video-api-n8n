@@ -553,23 +553,32 @@ function renderJob(job) {
 }
 
 // ── Chargement des jobs ───────────────────────────────────────────────────────
+function showAuthBanner() {
+  document.getElementById('auth-banner').classList.remove('hidden');
+  document.getElementById('loading-state').classList.add('hidden');
+  document.getElementById('stats-bar').classList.add('hidden');
+  document.getElementById('btn-share-link').classList.add('hidden');
+  document.getElementById('jobs-container').innerHTML = '';
+  document.getElementById('no-jobs').classList.add('hidden');
+}
+
 async function loadJobs() {
-  if (!apiKey) {
-    document.getElementById('auth-banner').classList.remove('hidden');
-    document.getElementById('loading-state').classList.add('hidden');
-    return;
-  }
+  if (!apiKey) { showAuthBanner(); return; }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     const r = await fetch(`${API_URL}/jobs`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` }
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (r.status === 401) {
       apiKey = '';
       localStorage.removeItem('videogen_api_key');
-      document.getElementById('auth-banner').classList.remove('hidden');
-      document.getElementById('btn-share-link').classList.add('hidden');
+      showAuthBanner();
       setStatus('red', 'Clé invalide');
       return;
     }
@@ -600,7 +609,16 @@ async function loadJobs() {
     }
 
   } catch (e) {
-    setStatus('red', 'Hors ligne');
+    document.getElementById('loading-state').classList.add('hidden');
+    if (e.name === 'AbortError') {
+      setStatus('red', 'Timeout — serveur lent');
+    } else {
+      setStatus('red', 'Hors ligne');
+    }
+    // Si on n'a jamais été authentifié, montrer le formulaire
+    if (!document.getElementById('stats-bar').classList.contains('hidden') === false) {
+      showAuthBanner();
+    }
     console.error(e);
   }
 }
