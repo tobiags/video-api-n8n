@@ -165,6 +165,12 @@ class LibraryError(VideoGenException):
     error_code = "LIBRARY_ERROR"
 
 
+class ScriptParserError(VideoGenException):
+    """Erreur de parsing d'un script pré-découpé (format PLAN/🎙/🎬 invalide)."""
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = "SCRIPT_PARSER_ERROR"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPER — Construction réponse d'erreur JSON standardisée
 # ══════════════════════════════════════════════════════════════════════════════
