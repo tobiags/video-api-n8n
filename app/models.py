@@ -6,7 +6,7 @@ Structure calquée sur le PRD §4 (modules techniques détaillés).
 """
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -139,6 +139,9 @@ class ScriptAnalysis(BaseModel):
     Validation stricte : somme des durées == total_duration (PRD §4.1).
     """
     total_duration: int = Field(..., gt=0, description="Durée totale en secondes")
+    source: Literal["claude", "parser"] = Field(
+        "claude", description="Origine de l'analyse : Claude API ou parser pré-découpé"
+    )
     sections: list[ScriptSection] = Field(..., min_length=1)
 
     @model_validator(mode="after")
