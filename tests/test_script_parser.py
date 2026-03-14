@@ -278,3 +278,139 @@ PLAN 2 (5–10s) - CTA
     result = parse_preformatted(script, VideoFormat.VERTICAL)
     assert len(result.sections) == 2
     assert result.total_duration == 10
+
+
+# ── Integration tests: pipeline routing ──────────────────────────────────────
+
+from unittest.mock import AsyncMock, patch
+from app.config import get_settings
+from tests.conftest import MINIMAL_ENV
+
+
+@pytest.fixture
+def env_vars(monkeypatch):
+    for k, v in MINIMAL_ENV.items():
+        monkeypatch.setenv(k, v)
+
+
+@pytest.mark.asyncio
+async def test_pipeline_routing_preformatted(env_vars):
+    """Pipeline skips Claude when script is pre-formatted."""
+    from app.main import run_pipeline, create_app
+    from app.models import VideoGenerationRequest, SheetsRow, VideoJob
+    from uuid import uuid4
+
+    settings = get_settings()
+    app = create_app(settings)
+
+    # Create a job with Théo's pre-formatted script
+    job_id = uuid4()
+    request = VideoGenerationRequest(
+        job_id=job_id,
+        sheets_row=SheetsRow(
+            row_id="row_1",
+            script=FULL_THEO_SCRIPT,
+            format="vertical",
+            strategy="A",
+            duration=45,
+            voice_id="tMyQcCxfGDdIt7wJ2RQw",
+        ),
+    )
+    job = VideoJob(job_id=job_id, row_id="row_1", request=request)
+
+    async with app.router.lifespan_context(app):
+        app.state.jobs[job_id] = job
+
+        with patch("app.main.analyze_script", new_callable=AsyncMock) as mock_claude, \
+             patch("app.main.generate_voiceover", new_callable=AsyncMock) as mock_el, \
+             patch("app.main.generate_clips", new_callable=AsyncMock) as mock_clips, \
+             patch("app.main.assemble_video", new_callable=AsyncMock) as mock_creat:
+
+            # Mock downstream to avoid real API calls
+            from app.models import ElevenLabsResult, CreatomateRenderResult
+            mock_el.return_value = ElevenLabsResult(
+                audio_path="/tmp/test.mp3", audio_duration_ms=45000,
+                voice_id="test", character_count=100,
+            )
+            mock_clips.return_value = []
+            mock_creat.return_value = CreatomateRenderResult(
+                render_id="r1", video_url="https://example.com/video.mp4",
+                duration_seconds=45.0, format="vertical",
+            )
+
+            await run_pipeline(job_id=job_id, app=app, settings=settings)
+
+            # Claude should NOT have been called
+            mock_claude.assert_not_called()
+            # ElevenLabs SHOULD have been called
+            mock_el.assert_called_once()
+            # Job should have script_analysis from parser
+            assert job.script_analysis is not None
+            assert job.script_analysis.source == "parser"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_routing_normal(env_vars):
+    """Pipeline calls Claude for normal scripts."""
+    from app.main import run_pipeline, create_app
+    from app.models import VideoGenerationRequest, SheetsRow, VideoJob
+    from uuid import uuid4
+
+    settings = get_settings()
+    app = create_app(settings)
+
+    job_id = uuid4()
+    request = VideoGenerationRequest(
+        job_id=job_id,
+        sheets_row=SheetsRow(
+            row_id="row_2",
+            script=NORMAL_SCRIPT * 3,  # repeat to meet min_length=50
+            format="vertical",
+            strategy="A",
+            duration=60,
+            voice_id="test-voice",
+        ),
+    )
+    job = VideoJob(job_id=job_id, row_id="row_2", request=request)
+
+    async with app.router.lifespan_context(app):
+        app.state.jobs[job_id] = job
+
+        mock_analysis = ScriptAnalysis(
+            total_duration=10,
+            sections=[
+                ScriptSection(
+                    id=1, text="Test", start=0, end=5, duration=5,
+                    broll_prompt="A person walking in sunlight, cinematic mood",
+                    keywords=["person"], scene_type="ambient",
+                ),
+                ScriptSection(
+                    id=2, text="Test two", start=5, end=10, duration=5,
+                    broll_prompt="A cityscape at night with neon lights glowing",
+                    keywords=["cityscape"], scene_type="ambient",
+                ),
+            ],
+        )
+
+        with patch("app.main.analyze_script", new_callable=AsyncMock, return_value=mock_analysis) as mock_claude, \
+             patch("app.main.generate_voiceover", new_callable=AsyncMock) as mock_el, \
+             patch("app.main.generate_clips", new_callable=AsyncMock) as mock_clips, \
+             patch("app.main.assemble_video", new_callable=AsyncMock) as mock_creat:
+
+            from app.models import ElevenLabsResult, CreatomateRenderResult
+            mock_el.return_value = ElevenLabsResult(
+                audio_path="/tmp/test.mp3", audio_duration_ms=10000,
+                voice_id="test", character_count=50,
+            )
+            mock_clips.return_value = []
+            mock_creat.return_value = CreatomateRenderResult(
+                render_id="r2", video_url="https://example.com/video2.mp4",
+                duration_seconds=10.0, format="vertical",
+            )
+
+            await run_pipeline(job_id=job_id, app=app, settings=settings)
+
+            # Claude SHOULD have been called (normal script)
+            mock_claude.assert_called_once()
+            assert job.script_analysis is not None
+            assert job.script_analysis.source == "claude"

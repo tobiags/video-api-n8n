@@ -59,6 +59,7 @@ from app.elevenlabs import generate_voiceover
 from app.kling import generate_clips
 from app.library import select_library_clips
 from app.creatomate import assemble_video
+from app.script_parser import detect_preformatted, parse_preformatted
 from app.voices import VoiceInfo, fetch_voice_info, list_catalog_voices
 
 logger = logging.getLogger(__name__)
@@ -527,24 +528,36 @@ async def run_pipeline(
     try:
         async with asyncio.timeout(settings.HTTP_TIMEOUT_VIDEO_GEN):  # global guard — I2 resolved
           async with semaphore:
-            # ── Étape 1 : Analyse script (Claude) ─────────────────────────────────
-            _update_job_progress(
-                job, JobStatus.RUNNING_CLAUDE,
-                "Analyse du script avec Claude", 10,
-                f"Découpage en sections de ~{settings.KLING_DURATION}s",
-            )
-            script_analysis = await analyze_script(
-                script=row.script,
-                format_=row.format,
-                duration=row.duration,
-                aspect_ratio=row.aspect_ratio,
-                http_client=http_client,
-                settings=settings,
-            )
+            # ── Étape 1 : Analyse script (Claude ou Parser) ───────────────────────
+            if detect_preformatted(row.script):
+                # Script pré-découpé : bypass Claude, parsing direct
+                logger.info("Job %s | Script pré-découpé détecté, bypass Claude", job_id)
+                script_analysis = parse_preformatted(row.script, row.format)
+                _update_job_progress(
+                    job, JobStatus.RUNNING_ELEVENLABS,
+                    "Script pré-découpé parsé (bypass Claude)", 15,
+                    f"{script_analysis.section_count} plans détectés",
+                )
+            else:
+                # Script normal : analyse Claude complète
+                _update_job_progress(
+                    job, JobStatus.RUNNING_CLAUDE,
+                    "Analyse du script avec Claude", 10,
+                    f"Découpage en sections de ~{settings.KLING_DURATION}s",
+                )
+                script_analysis = await analyze_script(
+                    script=row.script,
+                    format_=row.format,
+                    duration=row.duration,
+                    aspect_ratio=row.aspect_ratio,
+                    http_client=http_client,
+                    settings=settings,
+                )
             job.script_analysis = script_analysis
             logger.info(
-                "Job %s | Claude OK : %d sections, durée totale %ds",
-                job_id, script_analysis.section_count, script_analysis.total_duration,
+                "Job %s | Analyse OK [%s] : %d sections, durée totale %ds",
+                job_id, script_analysis.source,
+                script_analysis.section_count, script_analysis.total_duration,
             )
 
             # ── Étape 2 : Voix off (ElevenLabs) ──────────────────────────────────
