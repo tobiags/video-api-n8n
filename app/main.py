@@ -552,6 +552,8 @@ async def run_pipeline(
                     aspect_ratio=row.aspect_ratio,
                     http_client=http_client,
                     settings=settings,
+                    persona=row.persona,
+                    ambiance=row.ambiance,
                 )
             job.script_analysis = script_analysis
             logger.info(
