@@ -73,10 +73,12 @@ class SheetsRow(BaseModel):
     music_url: str | None = Field(None, description="URL de la musique de fond")
     cta: str = Field("", max_length=200, description="Texte du call-to-action final")
     logo_url: str | None = Field(None, description="Override URL logo (sinon config.py)")
+    persona: str | None = Field(None, description="Description du protagoniste visuel (genre, âge, apparence)")
+    ambiance: str | None = Field(None, description="Style visuel souhaité (tonalité, lumière, palette)")
 
     # I3 fix étendu : strip \r\n et espaces sur tous les champs string venant de Sheets
     # Google Sheets + n8n peuvent inclure des \r\n en fin de cellule (Windows CRLF)
-    @field_validator("voice_id", "script", "cta", "music_url", "logo_url", mode="before")
+    @field_validator("voice_id", "script", "cta", "music_url", "logo_url", "persona", "ambiance", mode="before")
     @classmethod
     def strip_sheets_strings(cls, v: Any) -> Any:
         return v.strip() if isinstance(v, str) else v
