@@ -55,7 +55,8 @@ AMBIANCE VISUELLE (si fournie) :
 → Applique ce style visuel à tous les plans : tonalité, lumière, palette.
 ```
 
-Si `persona` est None, le bloc personnage indique à Claude de déduire du script.
+Si `persona` est None, le bloc personnage est **omis** — la règle 6 existante du system prompt
+gère déjà la déduction du genre/apparence depuis le script (pas de redondance).
 Si `ambiance` est None, le bloc ambiance est omis du prompt.
 
 ### 2.4 Modifications `claude.py` — Signature `analyze_script()`
@@ -111,8 +112,11 @@ ambiance: $json['Ambiance'] || ''
 ### 3.4 Endpoint GET /review/{job_id}
 
 **URL :** `GET /review/{job_id}`
-**Auth :** Aucune — le job_id UUID v4 est suffisamment imprévisible
+**Auth :** Aucune — le job_id UUID v4 est suffisamment imprévisible (lecture seule)
 **Disponible :** Dès que `job.script_analysis` est rempli (après étape Claude ou parser)
+
+**Si `script_analysis` pas encore disponible :** Retourne une page HTML "Analyse en cours..."
+avec auto-refresh toutes les 3 secondes (polling GET /status/{job_id} en JS).
 
 **Page HTML avec :**
 - Titre : "Review des prompts — Job {job_id_court}"
@@ -124,15 +128,23 @@ ambiance: $json['Ambiance'] || ''
   - **Keywords** (input éditable, pré-rempli)
   - Scene type (select éditable)
 - Statut du pipeline en temps réel (badge : en cours / terminé / échoué)
-- Bouton **"Relancer avec mes modifications"** (visible seulement si des champs ont été modifiés)
+- Bouton **"Relancer avec mes modifications"** :
+  - Visible seulement si des champs ont été modifiés
+  - Si pipeline en cours : warning "Le pipeline original est encore en cours. Relancer crée un nouveau job parallèle."
+  - Debounce côté client : bouton désactivé 5s après clic pour éviter les doubles
 - Lien vers la vidéo finale si le job est terminé
 
 **Style :** Simple, responsive, même charte que le monitor existant.
 
 ### 3.5 Endpoint POST /review/{job_id}/relaunch
 
-**Auth :** Aucune (même logique UUID)
-**Body :**
+**Auth :** HMAC token dans l'URL — `/review/{job_id}/relaunch?token=<hmac_sha256(job_id, API_SECRET_KEY)>`
+Le token est généré côté serveur et injecté dans le formulaire HTML de la page review.
+Cela empêche un tiers qui connaît le job_id de déclencher des relances (coûts API).
+
+**Limites :** Max 2 relances par job original (compteur `relaunch_count` sur VideoJob).
+
+**Body :** Le client envoie TOUTES les sections (pré-remplies depuis la page) :
 ```json
 {
   "sections": [
@@ -145,19 +157,33 @@ ambiance: $json['Ambiance'] || ''
   ]
 }
 ```
+Les champs `text`, `start`, `end`, `duration` sont copiés depuis le job original (lecture seule côté UI).
 
 **Comportement :**
-1. Récupère le job original
-2. Crée un nouveau `VideoGenerationRequest` avec les mêmes paramètres (script, format, voix, etc.)
-3. Construit un `ScriptAnalysis` avec `source="review"` en utilisant les sections du job original mais avec les prompts/keywords/scene_type modifiés
-4. Lance un nouveau pipeline à partir de l'étape ElevenLabs (bypass Claude)
-5. Retourne le nouveau `job_id` + redirect vers la page review du nouveau job
+1. Valide le token HMAC et le compteur de relances (max 2)
+2. Récupère le job original — si disparu (restart serveur), retourne 410 Gone avec message user-friendly
+3. Crée un nouveau `VideoGenerationRequest` en copiant tous les champs de `SheetsRow` original :
+   `voice_id`, `strategy`, `format`, `duration`, `music_url`, `cta`, `logo_url`, `persona`, `ambiance`, `webhook_url`
+4. Construit un `ScriptAnalysis` avec `source="review"` et `original_source` préservé.
+   Merge : `text/start/end/duration` du job original + `broll_prompt/keywords/scene_type` du body client
+5. Le nouveau job a `parent_job_id` pointant vers le job original (traçabilité)
+6. Lance un nouveau pipeline à partir de l'étape ElevenLabs (bypass Claude)
+7. Retourne le nouveau `job_id` + redirect vers la page review du nouveau job
 
-### 3.6 Nouveau `source` literal
+### 3.6 Nouveau `source` literal et traçabilité
 
-Ajouter `"review"` aux valeurs possibles de `ScriptAnalysis.source` :
 ```python
 source: Literal["claude", "parser", "review"]
+original_source: Literal["claude", "parser"] | None = Field(
+    None, description="Source originale avant modification review"
+)
+```
+
+### 3.6b Nouveau champ VideoJob
+
+```python
+parent_job_id: UUID | None = Field(None, description="Job original si relance depuis review")
+relaunch_count: int = Field(0, description="Nombre de relances depuis ce job (max 2)")
 ```
 
 ### 3.7 Lien review dans le pipeline
@@ -166,6 +192,8 @@ Après l'étape Claude/parser dans `run_pipeline`, écrire le review_url dans `j
 ```python
 review_url = f"{settings.API_BASE_URL}/review/{job_id}"
 ```
+
+Fallback : si `API_BASE_URL` est vide, utiliser `request.base_url` (comme pour `status_url`).
 
 Ce lien est inclus dans le webhook de notification n8n (champ `review_url` dans `NotificationPayload`), et n8n l'écrit dans la colonne `Statut detail` du Sheet.
 
@@ -182,7 +210,7 @@ review_url: str | None = Field(None, description="URL de la page review des prom
 
 | Fichier | Modifications |
 |---------|--------------|
-| `app/models.py` | SheetsRow +persona/ambiance, ScriptAnalysis source +review, NotificationPayload +review_url, VideoJob +review_url |
+| `app/models.py` | SheetsRow +persona/ambiance, ScriptAnalysis source +review +original_source, NotificationPayload +review_url, VideoJob +review_url/parent_job_id/relaunch_count |
 | `app/claude.py` | System prompt enrichi, signature +persona/ambiance |
 | `app/main.py` | Passer persona/ambiance à analyze_script, générer review_url, inclure dans notification |
 | `app/review.py` | **NOUVEAU** — Page HTML review + endpoint POST relaunch |
@@ -194,7 +222,18 @@ review_url: str | None = Field(None, description="URL de la page review des prom
 
 ---
 
-## 5. Ce qui ne change PAS
+## 5. Limitations connues
+
+- **In-memory job store** : si le serveur redémarre entre la fin du pipeline et le clic "Relancer",
+  le job original est perdu. L'endpoint relaunch retourne 410 Gone avec un message user-friendly.
+  La migration Redis (Day 2) résoudra ce problème pour la production.
+- **Pas de CORS cross-origin** : la page review JS poste en URL relative (même origine).
+  Si la page est servie derrière un proxy avec un hostname différent, ça pourrait poser problème.
+  Pour l'instant, le setup Coolify/Traefik sert tout depuis le même domaine.
+
+---
+
+## 6. Ce qui ne change PAS
 
 - Le pipeline existant reste identique si persona/ambiance sont vides
 - Les scripts pré-formatés (PLAN/🎙/🎬) ne passent pas par Claude → la review montre les prompts du parser
