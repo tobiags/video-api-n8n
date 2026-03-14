@@ -59,6 +59,7 @@ from app.elevenlabs import generate_voiceover
 from app.kling import generate_clips
 from app.library import select_library_clips
 from app.creatomate import assemble_video
+from app.review import router as review_router
 from app.script_parser import detect_preformatted, parse_preformatted
 from app.voices import VoiceInfo, fetch_voice_info, list_catalog_voices
 
@@ -206,6 +207,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # ── Routes ───────────────────────────────────────────────────────────────
     app.include_router(_build_router())
+    app.include_router(review_router)
 
     # ── Fichiers audio statiques (accessibles par Creatomate via URL publique) ─
     os.makedirs("/tmp/videogen/audio", exist_ok=True)
@@ -528,8 +530,17 @@ async def run_pipeline(
     try:
         async with asyncio.timeout(settings.HTTP_TIMEOUT_VIDEO_GEN):  # global guard — I2 resolved
           async with semaphore:
-            # ── Étape 1 : Analyse script (Claude ou Parser) ───────────────────────
-            if detect_preformatted(row.script):
+            # ── Étape 1 : Analyse script (Claude ou Parser ou Review) ──────────────
+            if job.script_analysis is not None:
+                # Relaunch depuis review — script_analysis déjà fourni
+                logger.info("Job %s | Script analysis fourni (review/relaunch), bypass Claude", job_id)
+                script_analysis = job.script_analysis
+                _update_job_progress(
+                    job, JobStatus.RUNNING_ELEVENLABS,
+                    "Prompts modifiés par le client (bypass Claude)", 15,
+                    f"{script_analysis.section_count} plans",
+                )
+            elif detect_preformatted(row.script):
                 # Script pré-découpé : bypass Claude, parsing direct
                 logger.info("Job %s | Script pré-découpé détecté, bypass Claude", job_id)
                 script_analysis = parse_preformatted(row.script, row.format)
