@@ -68,6 +68,17 @@ _USER_PROMPT = """Script à découper ({total_duration} secondes, format {aspect
 
 {script}"""
 
+_PERSONA_BLOCK = """
+CONTEXTE PERSONNAGE (OBLIGATOIRE — applique à CHAQUE prompt) :
+{persona}
+→ Utilise EXACTEMENT ce profil pour CHAQUE prompt Kling : genre, âge, apparence.
+→ CHAQUE broll_prompt DOIT commencer par le genre et l'âge du personnage."""
+
+_AMBIANCE_BLOCK = """
+AMBIANCE VISUELLE (applique à CHAQUE plan) :
+{ambiance}
+→ Applique ce style visuel à tous les plans : tonalité, lumière, palette."""
+
 _RETRY_PROMPT = """Ton JSON précédent était invalide. Erreur : {error}
 
 Reprends l'analyse et retourne UNIQUEMENT un JSON valide respectant strictement le schéma.
@@ -81,6 +92,8 @@ async def analyze_script(
     aspect_ratio: str,
     http_client: httpx.AsyncClient,
     settings: Settings,
+    persona: str | None = None,
+    ambiance: str | None = None,
 ) -> ScriptAnalysis:
     """
     Appelle Claude pour découper le script en sections temporelles
@@ -120,6 +133,10 @@ async def analyze_script(
         total_duration=duration,
         aspect_ratio=aspect_ratio,
     )
+    if persona:
+        system += _PERSONA_BLOCK.format(persona=persona)
+    if ambiance:
+        system += _AMBIANCE_BLOCK.format(ambiance=ambiance)
     last_error: Exception | None = None
     raw: str = ""
 
