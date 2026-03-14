@@ -167,7 +167,7 @@ class LibraryError(VideoGenException):
 
 class ScriptParserError(VideoGenException):
     """Erreur de parsing d'un script pré-découpé (format PLAN/🎙/🎬 invalide)."""
-    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    status_code = 422
     error_code = "SCRIPT_PARSER_ERROR"
 
 
