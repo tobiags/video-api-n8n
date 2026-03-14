@@ -141,8 +141,11 @@ class ScriptAnalysis(BaseModel):
     Validation stricte : somme des durées == total_duration (PRD §4.1).
     """
     total_duration: int = Field(..., gt=0, description="Durée totale en secondes")
-    source: Literal["claude", "parser"] = Field(
-        "claude", description="Origine de l'analyse : Claude API ou parser pré-découpé"
+    source: Literal["claude", "parser", "review"] = Field(
+        "claude", description="Origine de l'analyse : Claude API, parser pré-découpé, ou review client"
+    )
+    original_source: Literal["claude", "parser"] | None = Field(
+        None, description="Source originale avant modification review"
     )
     sections: list[ScriptSection] = Field(..., min_length=1)
 
@@ -341,6 +344,9 @@ class VideoJob(BaseModel):
     # Résultat final
     render_result: CreatomateRenderResult | None = None
     drive_url: str | None = None         # URL finale Google Drive
+    review_url: str | None = None
+    parent_job_id: UUID | None = Field(None, description="Job original si relance depuis review")
+    relaunch_count: int = Field(0, description="Nombre de relances depuis ce job (max 2)")
 
     error: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -412,4 +418,5 @@ class NotificationPayload(BaseModel):
     error_detail: str | None = None      # Pour partial/blocking error
     affected_step: str | None = None     # Ex: "Kling clip section 4"
     corrective_action: str | None = None # Suggestion d'action
+    review_url: str | None = Field(None, description="URL de la page review des prompts")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
