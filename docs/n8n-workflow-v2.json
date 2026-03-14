@@ -1,0 +1,232 @@
+{
+  "name": "LANCEMENT TACHES v2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "1HhLkOKJvxr2ZaYvu4IbvxVsR4yzn3_UHgwjDaSIlzgo",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Campagnes",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HhLkOKJvxr2ZaYvu4IbvxVsR4yzn3_UHgwjDaSIlzgo/edit#gid=0"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Read Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        980,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WuuB2fQnxWavSbfO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(item => {\n  const statut = String(item.json['Statut'] || '').toLowerCase().trim();\n  return statut === 'ok';\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        208
+      ],
+      "id": "97bbda2d-20fa-4d09-9b30-a0b707408469",
+      "name": "Filtre Statut OK"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1HhLkOKJvxr2ZaYvu4IbvxVsR4yzn3_UHgwjDaSIlzgo",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Campagnes",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1HhLkOKJvxr2ZaYvu4IbvxVsR4yzn3_UHgwjDaSIlzgo/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Statut": "En cours",
+            "row_number": "={{ $json['row_number'] }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true
+            },
+            {
+              "id": "Statut",
+              "displayName": "Statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "d7553e15-86a3-4b69-a38a-b96e2bd6a328",
+      "name": "Update status En cours",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1440,
+        208
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "WuuB2fQnxWavSbfO",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ys4o0cosg48gk0o4g4o8o4kw.95.217.220.12.sslip.io/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ sheets_row: { row_id: $('Filtre Statut OK').item.json['row_number'].toString(), script: $('Filtre Statut OK').item.json['Script'], format: $('Filtre Statut OK').item.json['Format'] || 'vertical', strategy: $('Filtre Statut OK').item.json['Strategie'] || 'B', duration: Number($('Filtre Statut OK').item.json['Durée cible']) || 60, voice_id: $('Filtre Statut OK').item.json['Voix'] || 'tMyQcCxfGDdIt7wJ2RQw', music_url: $('Filtre Statut OK').item.json['Musique'] || '', cta: $('Filtre Statut OK').item.json['CTA'] || '', persona: $('Filtre Statut OK').item.json['Personnage'] || '', ambiance: $('Filtre Statut OK').item.json['Ambiance'] || '' }, webhook_url: \"https://n8n.95.217.220.12.sslip.io/webhook/videogen-result\" }) }}",
+        "options": {
+          "response": {
+            "response": {}
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "32bed020-b802-4bdb-8780-48fbd1aee956",
+      "name": "POST /generate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "s5kbCacUcSvoFKfS",
+          "name": "VideoGen API Key"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Google Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Google Sheet": {
+      "main": [
+        [
+          {
+            "node": "Filtre Statut OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtre Statut OK": {
+      "main": [
+        [
+          {
+            "node": "Update status En cours",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update status En cours": {
+      "main": [
+        [
+          {
+            "node": "POST /generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c6def52d4be541647f5762a523419c1a7e35b42e93d17c5eafdcf523d870b849"
+  },
+  "tags": []
+}
