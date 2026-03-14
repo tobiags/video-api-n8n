@@ -567,10 +567,13 @@ async def run_pipeline(
                     ambiance=row.ambiance,
                 )
             job.script_analysis = script_analysis
+            # Générer le lien review
+            job.review_url = f"{settings.API_BASE_URL}/review/{job_id}"
             logger.info(
-                "Job %s | Analyse OK [%s] : %d sections, durée totale %ds",
+                "Job %s | Analyse OK [%s] : %d sections, durée totale %ds | Review: %s",
                 job_id, script_analysis.source,
                 script_analysis.section_count, script_analysis.total_duration,
+                job.review_url,
             )
 
             # ── Étape 2 : Voix off (ElevenLabs) ──────────────────────────────────
@@ -682,6 +685,7 @@ async def run_pipeline(
                         row_number=row_number,
                         message=f"Pub générée avec succès — durée {render_result.duration_seconds:.0f}s",
                         drive_url=render_result.video_url,
+                        review_url=job.review_url,
                     ),
                     http_client,
                 )
