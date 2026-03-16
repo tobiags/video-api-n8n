@@ -1,5 +1,9 @@
 """
-script_parser.py — Détection et parsing des scripts pré-découpés (format PLAN/🎙/🎬)
+script_parser.py — Détection et parsing des scripts pré-découpés
+
+Deux formats supportés :
+  - Format emoji (🎙/🎬) : PLAN N (Xs-Ys) — LABEL / 🎙 "voix" / 🎬 prompt
+  - Format PUB16 (Théo) : PLAN N — H:MM — H:MM / Voix off : « » / Prompt Kling : / [prompt]
 
 Quand le client fournit un script pré-découpé avec ses propres prompts Kling,
 ce module bypasse Claude et retourne directement un ScriptAnalysis.
@@ -14,31 +18,54 @@ from app.models import SceneType, ScriptAnalysis, ScriptSection, VideoFormat
 
 logger = logging.getLogger(__name__)
 
-# Regex pour détecter un bloc PLAN complet (header + 🎙 + 🎬)
-# Accepte hyphen (-), en-dash (–), em-dash (—) pour les timestamps et le séparateur
+# ── Format emoji : PLAN N (Xs-Ys) — LABEL + 🎙 + 🎬 ─────────────────────────
 _PLAN_BLOCK_RE = re.compile(
     r"PLAN\s+\d+\s*\(\d+\s*[–\-]\s*\d+s\)\s*[—–\-]+\s*\S+",
     re.IGNORECASE,
 )
 
+# ── Format PUB16 : PLAN N — H:MM — H:MM + Voix off + Prompt Kling ────────────
+# Détecte les lignes "PLAN N — M:SS" (toutes variantes de tirets)
+_PLAN_PUB_DETECT_RE = re.compile(
+    r"^PLAN\s+\d+\s*[—–\-]+\s*\d+:\d+",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+# Parser complet PUB16 :
+# Captures : plan_num, min_start, sec_start, min_end, sec_end, voice_text, kling_prompt
+_PLAN_PUB_FULL_RE = re.compile(
+    r"PLAN\s+(\d+)\s*[—–\-]+\s*(\d+):(\d+)\s*[—–\-]+\s*(\d+):(\d+)\s*\n"
+    r"\s*Voix\s+off\s*:\s*[«\"](.+?)[»\"]\s*\n"
+    r"\s*Prompt\s+Kling\s*:\s*\n(.+?)(?=\n\s*PLAN\s+\d+\s*[—–\-]|\Z)",
+    re.DOTALL | re.IGNORECASE,
+)
+
 
 def detect_preformatted(script: str) -> bool:
-    """Retourne True si au moins 2 blocs PLAN avec 🎙 + 🎬 sont trouvés.
+    """Retourne True si le script est en format pré-découpé (emoji ou PUB16).
 
-    Le seuil de 2 blocs évite les faux positifs sur un script qui contiendrait
-    le mot 'PLAN' une seule fois par hasard.
+    Le seuil de 2 blocs évite les faux positifs.
     """
-    # Cherche les blocs qui ont les 3 composants : PLAN header + 🎙 + 🎬
+    # Format emoji : PLAN header + 🎙 + 🎬
     blocks = _PLAN_BLOCK_RE.findall(script)
-    if len(blocks) < 2:
-        return False
-    # Vérifier que 🎙 et 🎬 apparaissent aussi
-    mic_count = script.count("🎙")
-    cam_count = script.count("🎬")
-    return mic_count >= 2 and cam_count >= 2
+    if len(blocks) >= 2:
+        mic_count = script.count("🎙")
+        cam_count = script.count("🎬")
+        if mic_count >= 2 and cam_count >= 2:
+            return True
+
+    # Format PUB16 : PLAN N — H:MM — H:MM + Voix off + Prompt Kling
+    pub_blocks = _PLAN_PUB_DETECT_RE.findall(script)
+    if len(pub_blocks) >= 2:
+        voix_count = len(re.findall(r"Voix\s+off\s*:", script, re.IGNORECASE))
+        prompt_count = len(re.findall(r"Prompt\s+Kling\s*:", script, re.IGNORECASE))
+        if voix_count >= 2 and prompt_count >= 2:
+            return True
+
+    return False
 
 
-# ── Full parser regex ────────────────────────────────────────────────────────
+# ── Full parser regex (format emoji) ─────────────────────────────────────────
 # Captures: plan_num, start, end, label, voice_text, kling_prompt
 _PLAN_FULL_RE = re.compile(
     r"PLAN\s+(\d+)\s*\((\d+)\s*[–\-]\s*(\d+)s\)\s*[—–\-]+\s*(.+?)\s*\n"
@@ -104,61 +131,15 @@ def _map_scene_type(label: str) -> SceneType:
     return _SCENE_TYPE_MAP.get(normalized, SceneType.AMBIENT)
 
 
-def parse_preformatted(script: str, format_: VideoFormat) -> ScriptAnalysis:
-    """Parse le script pré-découpé en ScriptAnalysis (synchrone, pas d'I/O).
+def _mmss_to_seconds(minutes: str, seconds: str) -> int:
+    """Convertit M:SS en secondes entières."""
+    return int(minutes) * 60 + int(seconds)
 
-    Le caller ne doit PAS l'awaiter — c'est une fonction synchrone pure CPU.
-    total_duration est calculé comme sum(section.duration), dérivé des timestamps.
 
-    Raises:
-        ScriptParserError: si le format est malformé.
-    """
-    matches = list(_PLAN_FULL_RE.finditer(script))
-
-    if len(matches) < 2:
-        raise ScriptParserError(
-            f"Script pré-découpé invalide : {len(matches)} plan(s) trouvé(s), minimum 2 requis"
-        )
-
-    sections: list[ScriptSection] = []
-
-    for m in matches:
-        plan_num = int(m.group(1))
-        start = int(m.group(2))
-        end = int(m.group(3))
-        label = m.group(4).strip()
-        voice_text = m.group(5).strip()
-        kling_prompt = m.group(6).strip()
-
-        # Validate timestamps
-        if end <= start:
-            raise ScriptParserError(
-                f"Plan {plan_num} : timestamps invalides (end {end}s <= start {start}s)"
-            )
-
-        # Validate non-empty content
-        if not voice_text:
-            raise ScriptParserError(f"Plan {plan_num} : texte voix off vide après 🎙")
-        if not kling_prompt or len(kling_prompt) < 10:
-            raise ScriptParserError(f"Plan {plan_num} : prompt Kling vide après 🎬")
-
-        sections.append(
-            ScriptSection(
-                id=plan_num,
-                text=voice_text,
-                start=start,
-                end=end,
-                duration=end - start,
-                broll_prompt=kling_prompt,
-                keywords=_extract_keywords(kling_prompt),
-                scene_type=_map_scene_type(label),
-            )
-        )
-
-    # Sort by plan number to ensure order
+def _validate_and_build(sections: list[ScriptSection]) -> ScriptAnalysis:
+    """Valide l'ordre/contigüité des sections et retourne un ScriptAnalysis."""
     sections.sort(key=lambda s: s.id)
 
-    # Validate contiguous timestamps
     for i in range(1, len(sections)):
         prev = sections[i - 1]
         curr = sections[i]
@@ -174,14 +155,106 @@ def parse_preformatted(script: str, format_: VideoFormat) -> ScriptAnalysis:
             )
 
     total_duration = sum(s.duration for s in sections)
+    logger.info("Script parsé : %d plans, durée totale %ds", len(sections), total_duration)
+    return ScriptAnalysis(total_duration=total_duration, sections=sections, source="parser")
 
-    logger.info(
-        "Script pré-découpé parsé : %d plans, durée totale %ds",
-        len(sections), total_duration,
-    )
 
-    return ScriptAnalysis(
-        total_duration=total_duration,
-        sections=sections,
-        source="parser",
-    )
+def _parse_emoji_format(script: str) -> list[ScriptSection]:
+    """Parse le format emoji (🎙/🎬) en liste de ScriptSection."""
+    matches = list(_PLAN_FULL_RE.finditer(script))
+    if len(matches) < 2:
+        raise ScriptParserError(
+            f"Script pré-découpé invalide : {len(matches)} plan(s) trouvé(s), minimum 2 requis"
+        )
+
+    sections: list[ScriptSection] = []
+    for m in matches:
+        plan_num = int(m.group(1))
+        start = int(m.group(2))
+        end = int(m.group(3))
+        label = m.group(4).strip()
+        voice_text = m.group(5).strip()
+        kling_prompt = m.group(6).strip()
+
+        if end <= start:
+            raise ScriptParserError(
+                f"Plan {plan_num} : timestamps invalides (end {end}s <= start {start}s)"
+            )
+        if not voice_text:
+            raise ScriptParserError(f"Plan {plan_num} : texte voix off vide après 🎙")
+        if not kling_prompt or len(kling_prompt) < 10:
+            raise ScriptParserError(f"Plan {plan_num} : prompt Kling vide après 🎬")
+
+        sections.append(ScriptSection(
+            id=plan_num,
+            text=voice_text,
+            start=start,
+            end=end,
+            duration=end - start,
+            broll_prompt=kling_prompt,
+            keywords=_extract_keywords(kling_prompt),
+            scene_type=_map_scene_type(label),
+        ))
+    return sections
+
+
+def _parse_pub16_format(script: str) -> list[ScriptSection]:
+    """Parse le format PUB16 (Voix off / Prompt Kling) en liste de ScriptSection."""
+    matches = list(_PLAN_PUB_FULL_RE.finditer(script))
+    if len(matches) < 2:
+        raise ScriptParserError(
+            f"Script PUB16 invalide : {len(matches)} plan(s) trouvé(s), minimum 2 requis"
+        )
+
+    sections: list[ScriptSection] = []
+    for m in matches:
+        plan_num = int(m.group(1))
+        start = _mmss_to_seconds(m.group(2), m.group(3))
+        end = _mmss_to_seconds(m.group(4), m.group(5))
+        voice_text = m.group(6).strip()
+        kling_prompt = m.group(7).strip()
+
+        if end <= start:
+            raise ScriptParserError(
+                f"Plan {plan_num} : timestamps invalides (end {end}s <= start {start}s)"
+            )
+        if not voice_text:
+            raise ScriptParserError(f"Plan {plan_num} : texte voix off vide (Voix off)")
+        if not kling_prompt or len(kling_prompt) < 10:
+            raise ScriptParserError(f"Plan {plan_num} : prompt Kling vide (Prompt Kling)")
+
+        sections.append(ScriptSection(
+            id=plan_num,
+            text=voice_text,
+            start=start,
+            end=end,
+            duration=end - start,
+            broll_prompt=kling_prompt,
+            keywords=_extract_keywords(kling_prompt),
+            scene_type=SceneType.AMBIENT,  # PUB16 n'a pas de labels de scène
+        ))
+    return sections
+
+
+def parse_preformatted(script: str, format_: VideoFormat) -> ScriptAnalysis:
+    """Parse le script pré-découpé en ScriptAnalysis (synchrone, pas d'I/O).
+
+    Détecte automatiquement le format (emoji ou PUB16) et dispatche.
+    Le caller ne doit PAS l'awaiter — c'est une fonction synchrone pure CPU.
+
+    Raises:
+        ScriptParserError: si le format est malformé.
+    """
+    # Détection du format PUB16 : PLAN N — H:MM — H:MM
+    pub_blocks = _PLAN_PUB_DETECT_RE.findall(script)
+    voix_count = len(re.findall(r"Voix\s+off\s*:", script, re.IGNORECASE))
+    prompt_count = len(re.findall(r"Prompt\s+Kling\s*:", script, re.IGNORECASE))
+
+    if len(pub_blocks) >= 2 and voix_count >= 2 and prompt_count >= 2:
+        logger.info("Format PUB16 détecté (Voix off / Prompt Kling)")
+        sections = _parse_pub16_format(script)
+    else:
+        logger.info("Format emoji détecté (🎙/🎬)")
+        sections = _parse_emoji_format(script)
+
+    return _validate_and_build(sections)

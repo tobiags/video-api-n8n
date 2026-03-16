@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     KLING_BASE_URL: str = "https://api.klingai.com"
     KLING_MODEL: str = "kling-v1-6"
     KLING_DURATION: int = 5          # durée cible par clip en secondes
+    KLING_NATIVE_AUDIO: bool = False # désactivé : on n'a pas besoin de l'audio IA Kling (économie crédits)
     # Limite API officielle : 5 jobs en parallèle (PRD §3 Stratégie A)
     KLING_MAX_PARALLEL_JOBS: int = 5
     # Polling toutes les 30 sec, timeout 10 min par clip (PRD §4.3)
@@ -81,6 +82,7 @@ class Settings(BaseSettings):
     # Plus utilisés — on passe à l'approche "source" dynamique (pas de templates statiques)
     CREATOMATE_TEMPLATE_VERTICAL: str = Field("", description="Obsolète — approche source dynamique")
     CREATOMATE_TEMPLATE_HORIZONTAL: str = Field("", description="Obsolète — approche source dynamique")
+    CREATOMATE_SHOW_CTA: bool = False    # True pour réactiver le texte CTA overlay
     CREATOMATE_POLLING_INTERVAL: float = 15.0
     CREATOMATE_RENDER_TIMEOUT: int = 900  # 15 min max
     CREATOMATE_MAX_RETRIES: int = 2

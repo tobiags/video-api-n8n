@@ -60,6 +60,7 @@ from app.kling import generate_clips
 from app.library import select_library_clips
 from app.creatomate import assemble_video
 from app.review import router as review_router
+from app.voice_test import router as voice_test_router
 from app.script_parser import detect_preformatted, parse_preformatted
 from app.voices import VoiceInfo, fetch_voice_info, list_catalog_voices
 
@@ -208,6 +209,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ── Routes ───────────────────────────────────────────────────────────────
     app.include_router(_build_router())
     app.include_router(review_router)
+    app.include_router(voice_test_router)
 
     # ── Fichiers audio statiques (accessibles par Creatomate via URL publique) ─
     os.makedirs("/tmp/videogen/audio", exist_ok=True)
@@ -591,6 +593,7 @@ async def run_pipeline(
                 voice_id=row.voice_id,
                 http_client=http_client,
                 settings=settings,
+                voice_speed=row.voice_speed,
             )
             job.elevenlabs_result = elevenlabs_result
 

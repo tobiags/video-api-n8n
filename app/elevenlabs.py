@@ -31,6 +31,7 @@ async def generate_voiceover(
     voice_id: str,
     http_client: httpx.AsyncClient,
     settings: Settings,
+    voice_speed: float | None = None,
 ) -> ElevenLabsResult:
     """
     Génère la voix off depuis le clone vocal ElevenLabs.
@@ -69,7 +70,9 @@ async def generate_voiceover(
                     "voice_settings": {
                         "stability": 0.55,        # légèrement stable = ton posé/consistant
                         "similarity_boost": 0.75,
-                        "speed": settings.ELEVENLABS_VOICE_SPEED,  # 0.85 = voix posée (défaut)
+                        # Vitesse : override si fourni, sinon config. Capped à 1.2 (max ElevenLabs).
+                        # Les vitesses > 1.2 sont gérées par un multiplicateur audio dans Creatomate.
+                        "speed": min(voice_speed if voice_speed is not None else settings.ELEVENLABS_VOICE_SPEED, 1.2),
                     },
                 },
                 timeout=120.0,

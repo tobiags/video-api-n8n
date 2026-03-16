@@ -123,6 +123,7 @@ async def generate_single_clip(
                 "prompt": section.broll_prompt,
                 "duration": settings.KLING_DURATION,
                 "aspect_ratio": aspect,
+                "with_audio": settings.KLING_NATIVE_AUDIO,
             },
             timeout=30.0,
         )

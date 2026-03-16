@@ -64,6 +64,11 @@ async def assemble_video(
         CreatomateAPIError:           Erreur API Creatomate
         CreatomateRenderTimeoutError: Rendu > CREATOMATE_RENDER_TIMEOUT secondes
     """
+    # Calcul du multiplicateur audio Creatomate pour les vitesses > 1.2 (max ElevenLabs)
+    # Ex: voice_speed=1.5 → ElevenLabs tourne à 1.2, Creatomate accélère de 1.5/1.2 = 1.25x
+    eleven_speed = min(row.voice_speed, 1.2)
+    audio_speed = row.voice_speed / eleven_speed if row.voice_speed > 1.2 else 1.0
+
     # template_id factice (modèle Pydantic l'exige, non utilisé dans le payload source)
     request = CreatomateRenderRequest(
         template_id="source",
@@ -71,10 +76,11 @@ async def assemble_video(
         clips=sorted(clips, key=lambda c: c.section_id),
         timestamps=elevenlabs_result.timestamps,
         logo_url=row.logo_url,
-        cta_text=row.cta,
+        cta_text=row.cta if settings.CREATOMATE_SHOW_CTA else "",
         music_url=row.music_url,
         format=row.format,
-        target_duration_seconds=elevenlabs_result.audio_duration_seconds,
+        target_duration_seconds=elevenlabs_result.audio_duration_seconds / audio_speed,
+        audio_speed=audio_speed,
     )
 
     last_error: Exception | None = None
@@ -224,13 +230,16 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
 
     # ── Track 2 : Voix off ────────────────────────────────────────────────────
     # duration=null → s'adapte à la longueur totale de la composition
-    elements.append({
+    voiceover_element: dict = {
         "type": "audio",
         "track": 2,
         "source": request.audio_url,
         "duration": None,
         "audio_fade_out": 0.5,
-    })
+    }
+    if request.audio_speed != 1.0:
+        voiceover_element["speed"] = round(request.audio_speed, 4)
+    elements.append(voiceover_element)
 
     # ── Track 3 : Musique de fond (optionnel) ─────────────────────────────────
     if request.music_url:

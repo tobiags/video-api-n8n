@@ -75,6 +75,7 @@ class SheetsRow(BaseModel):
     logo_url: str | None = Field(None, description="Override URL logo (sinon config.py)")
     persona: str | None = Field(None, description="Description du protagoniste visuel (genre, âge, apparence)")
     ambiance: str | None = Field(None, description="Style visuel souhaité (tonalité, lumière, palette)")
+    voice_speed: float = Field(0.85, ge=0.7, le=2.0, description="Vitesse voix off (0.7–2.0). >1.2 = accélération audio Creatomate en complément d'ElevenLabs max 1.2)")
 
     # I3 fix étendu : strip \r\n et espaces sur tous les champs string venant de Sheets
     # Google Sheets + n8n peuvent inclure des \r\n en fin de cellule (Windows CRLF)
@@ -290,6 +291,8 @@ class CreatomateRenderRequest(BaseModel):
     target_duration_seconds: float | None = Field(
         None, description="Durée cible composition = durée audio ElevenLabs"
     )
+    # Multiplicateur de vitesse audio appliqué dans Creatomate (pour voice_speed > 1.2)
+    audio_speed: float = Field(1.0, ge=0.5, le=3.0, description="Accélération audio Creatomate (1.0 = normal)")
 
     @model_validator(mode="after")
     def validate_clips_ordered(self) -> "CreatomateRenderRequest":
