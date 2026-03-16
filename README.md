@@ -1,155 +1,199 @@
-# VideoGen — AI Video Ad Automation
+# VideoGen — Pipeline IA de génération de publicités vidéo
 
-> Pipeline automatisé de génération de publicités vidéo par intelligence artificielle, du script à la livraison sur Google Drive.
+![Python](https://img.shields.io/badge/Python-3.14-blue?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)
+![Tests](https://img.shields.io/badge/Tests-71%20passed-brightgreen?logo=pytest&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Licence](https://img.shields.io/badge/Licence-Privée-lightgrey)
 
----
-
-## Vue d'ensemble
-
-VideoGen transforme une ligne Google Sheets en une vidéo publicitaire complète sans intervention humaine.
-
-```
-Google Sheets (Statut = ok)
-    → Script analysé par Claude AI
-    → Voix off générée par ElevenLabs
-    → Clips B-roll via Kling AI / Pexels
-    → Vidéo assemblée par Creatomate
-    → Livrée automatiquement sur Google Drive
-```
-
-Temps moyen de génération : **8 à 15 minutes** par vidéo.
-Coût moyen par vidéo (stratégie B) : **~2,50 $** à partir du 2e mois.
+> Du script brut à la vidéo publicitaire livrée sur Google Drive — **sans intervention humaine**.
 
 ---
 
-## Fonctionnalités
+## 🔴 Le problème
 
-- **Analyse IA du script** — Claude AI découpe le script en scènes, génère les timings et les prompts B-roll
-- **Voix off naturelle** — ElevenLabs avec synchronisation mot à mot pour les sous-titres
-- **B-roll intelligent** — Cascade : bibliothèque locale → Pexels (gratuit) → Kling AI (génératif)
-- **Assemblage automatique** — Creatomate assemble voix, clips, sous-titres, musique, logo et CTA
-- **Formats flexibles** — 9:16 (vertical), 16:9 (horizontal), durée libre de 15 à 90 secondes
-- **Queue de jobs** — jusqu'à 2 pipelines en parallèle, les suivants s'empilent en file d'attente
-- **Dashboard de monitoring** — interface temps réel pour suivre chaque étape du pipeline
-- **Catalogue de voix** — écoute et sélection des voix ElevenLabs depuis le dashboard
-- **Tracking d'erreurs** — intégration Sentry pour alertes en production
+Produire des publicités vidéo à la chaîne est **lent, coûteux et difficile à scaler**.
+
+- Un monteur humain prend **2 à 4 heures** par vidéo
+- Le coût de production oscille entre **150 et 500 €** par pub
+- Changer de format, de voix ou de durée implique de **tout recommencer**
+- Les agences et créateurs qui produisent 10, 20 ou 50 pubs par mois se heurtent à un mur opérationnel
 
 ---
 
-## Stack technique
+## ✅ La solution
 
-| Composant | Technologie |
-|-----------|-------------|
-| API Backend | Python 3.14 · FastAPI 0.115 · Pydantic v2 |
-| Serveur | Uvicorn / Gunicorn · Docker · Coolify |
-| Proxy | Traefik |
-| Orchestration | n8n (workflows no-code) |
-| IA Script | Anthropic Claude claude-opus-4-6 |
-| IA Voix | ElevenLabs |
-| IA Vidéo | Kling AI (JWT auth) |
-| Stock vidéo | Pexels API |
-| Assemblage | Creatomate |
-| Stockage | Google Drive · Google Sheets |
-| Monitoring | Sentry |
+**VideoGen** est un pipeline d'automatisation qui transforme une ligne Google Sheets en une vidéo publicitaire complète en moins de 15 minutes.
+
+L'opérateur remplit une ligne dans un tableau (script, voix, format, durée) et met le statut sur `OK`. Le reste est automatique : analyse du script, génération de la voix off, création des clips B-roll, assemblage et livraison.
+
+**Résultat :** une vidéo prête à diffuser sur Google Drive, avec tracking complet dans le Sheet.
 
 ---
 
-## Architecture
+## 🏗️ Architecture
 
+```mermaid
+flowchart TD
+    A["📊 Google Sheets\nStatut = OK"] -->|"Schedule toutes les minutes"| B["⚙️ n8n\nOrchestration"]
+    B -->|"POST /generate"| C["🚀 FastAPI\nBackend Python"]
+
+    C --> D["🧠 Claude AI\nAnalyse script\nGénère prompts B-roll"]
+    C --> E["🎙️ ElevenLabs\nVoix off naturelle\nTimestamps mot à mot"]
+    C --> F["🎬 Kling AI / Pexels\nGénération clips B-roll\nCascade intelligente"]
+
+    D --> G["🎞️ Creatomate\nAssemblage vidéo\nVoix + clips + musique"]
+    E --> G
+    F --> G
+
+    G --> H["📁 Google Drive\nLivraison automatique"]
+    G -->|"Webhook résultat"| I["📊 Google Sheets\nStatut = Livré\n+ Lien output"]
 ```
-┌─────────────────┐     webhook      ┌─────────────┐
-│  Google Sheets  │ ─────────────▶  │     n8n     │
-│  (déclencheur)  │                  │  (workflow) │
-└─────────────────┘                  └──────┬──────┘
-                                            │ POST /generate
-                                            ▼
-                                    ┌─────────────┐
-                                    │  FastAPI    │
-                                    │  (backend)  │
-                                    └──────┬──────┘
-                                           │
-                    ┌──────────────────────┼──────────────────────┐
-                    ▼                      ▼                       ▼
-             ┌──────────┐          ┌────────────┐         ┌──────────────┐
-             │ Claude AI │          │ ElevenLabs │         │  Kling AI /  │
-             │ (script)  │          │  (voix)    │         │  Pexels      │
-             └──────────┘          └────────────┘         └──────────────┘
-                                           │
-                                           ▼
-                                    ┌────────────┐
-                                    │ Creatomate │
-                                    │ (assemblage)│
-                                    └──────┬─────┘
-                                           │
-                                           ▼
-                                    ┌────────────┐
-                                    │Google Drive│
-                                    │ + Sheets   │
-                                    └────────────┘
-```
+
+**Flux en 4 étapes :**
+
+| # | Étape | Acteur | Durée |
+|---|-------|--------|-------|
+| 1 | n8n détecte le statut `OK` et appelle l'API | n8n | < 1 min |
+| 2 | Claude analyse le script, génère les prompts B-roll et les timings | Claude AI | ~30s |
+| 3 | ElevenLabs synthétise la voix, Kling génère les clips B-roll | ElevenLabs + Kling | ~5–10 min |
+| 4 | Creatomate assemble la vidéo finale, upload Drive, mise à jour Sheet | Creatomate | ~2 min |
 
 ---
 
-## Structure du projet
+## 🛠️ Stack technique
 
-```
-video-api/
-├── app/
-│   ├── main.py           # FastAPI : endpoints, pipeline, queue
-│   ├── claude.py         # Analyse script → structure JSON
-│   ├── elevenlabs.py     # Génération voix off + timestamps
-│   ├── kling.py          # Génération clips B-roll IA
-│   ├── library.py        # Cascade B-roll (stratégie A/B)
-│   ├── creatomate.py     # Assemblage vidéo finale
-│   ├── models.py         # Schémas Pydantic
-│   ├── config.py         # Configuration centralisée
-│   ├── errors.py         # Gestion d'erreurs unifiée
-│   ├── monitor_html.py   # Dashboard de monitoring
-│   └── voices.py         # Catalogue voix ElevenLabs
-├── tests/
-│   ├── test_claude.py
-│   ├── test_elevenlabs.py
-│   ├── test_kling.py
-│   ├── test_library.py
-│   ├── test_creatomate.py
-│   ├── test_integration.py
-│   └── test_config.py
-├── docs/
-│   ├── deployment.md     # Guide déploiement VPS
-│   ├── n8n-setup.md      # Configuration workflows n8n
-│   └── guide-client.md   # Manuel d'utilisation client
-├── n8n/
-│   └── workflow_videogen.json
-├── Dockerfile
-├── gunicorn.conf.py
-└── pyproject.toml
-```
+| Couche | Technologie | Rôle |
+|--------|------------|------|
+| **Backend** | Python 3.14 · FastAPI · Pydantic v2 | API REST, pipeline, queue de jobs |
+| **Serveur** | Uvicorn · Gunicorn · Docker | Exécution et containerisation |
+| **Proxy / Deploy** | Traefik · Coolify | HTTPS, reverse proxy, déploiement VPS |
+| **Orchestration** | n8n | Workflows no-code, triggers, webhooks |
+| **IA — Script** | Anthropic Claude Opus | Découpage scènes, timings, prompts B-roll |
+| **IA — Voix** | ElevenLabs | Synthèse vocale + timestamps mot à mot |
+| **IA — Vidéo** | Kling AI | Génération clips B-roll par prompt |
+| **Stock vidéo** | Pexels API | Fallback gratuit avant Kling |
+| **Assemblage** | Creatomate | Rendu vidéo final (voix + clips + musique) |
+| **Stockage** | Google Drive · Google Sheets | Livraison + dashboard opérateur |
+| **Monitoring** | Sentry · Dashboard HTML | Alertes prod + suivi jobs temps réel |
 
 ---
 
-## Déploiement
+## 🎬 Demo workflow
+
+> 📌 *Vidéo démo et screenshots à venir*
+
+**1 — L'opérateur remplit une ligne dans le Sheet**
+
+```
+| Script                  | Statut | Format   | Voix ID           | Durée | Vitesse voix |
+|-------------------------|--------|----------|-------------------|-------|--------------|
+| Il y a une femme qui... | OK     | vertical | tMyQcCxfGDdIt7wJ  | 70    | 1.5          |
+```
+
+**2 — n8n détecte la ligne et lance le pipeline**
+
+```
+Schedule (1 min) → Filtre Statut OK → Update "En cours" → POST /generate
+```
+
+**3 — Le backend orchestre les APIs**
+
+```
+Claude analyse le script         →  14 scènes · 14 prompts Kling · timings précis
+ElevenLabs génère la voix off    →  ~70s audio · timestamps mot à mot
+Kling AI génère les clips        →  14 clips B-roll · 5s chacun · sans audio natif
+Creatomate assemble la vidéo     →  70s · 9:16 · voix + B-roll + musique
+```
+
+**4 — Livraison automatique**
+
+```
+Upload Google Drive  →  Webhook n8n  →  Statut = "Livré" + lien dans le Sheet
+```
+
+⏱️ **Temps total : 8 à 15 minutes** | 💰 **Coût moyen : ~2,50 $ par vidéo** (dès le 2e mois)
+
+---
+
+## 💼 Valeur business
+
+| Indicateur | Production humaine | VideoGen | Gain |
+|-----------|-------------------|----------|------|
+| Temps par vidéo | 2 à 4 heures | **8 à 15 min** | **×12 à ×20** |
+| Coût par vidéo | 150 à 500 € | **~2,50 $** | **×60 à ×200** |
+| Vidéos / jour (1 opérateur) | 2 à 3 | **50+** | **×20** |
+| Intervention humaine | Constante | **Zéro** | — |
+| Scalabilité | Linéaire (↑ coût) | **Quasi illimitée** | — |
+
+**Break-even :** rentable dès la 2e vidéo par rapport à un monteur externalisé.
+
+**Scalabilité :** N vidéos en file d'attente — l'opérateur remplit le Sheet, le pipeline tourne seul.
+
+---
+
+## 🎯 Cas d'usage
+
+**Agences de publicité digitale**
+Produire 20 à 50 variantes de pub par semaine pour des clients e-commerce sans embaucher de monteurs. Chaque pub est un script différent, même pipeline automatique.
+
+**Créateurs de contenu & Personal branding**
+Transformer des scripts générés par IA en vidéos B-roll publiables directement sur Instagram Reels, TikTok ou YouTube Shorts.
+
+**E-commerçants & Dropshippers**
+Générer des publicités produit en masse pour tester différentes accroches, populations cibles et durées — sans coût fixe de production.
+
+**Studios de contenu vidéo**
+Automatiser la production de formats récurrents (tutoriels, témoignages, UGC) et libérer les monteurs humains pour les projets à forte valeur ajoutée.
+
+**SaaS & Startups**
+Créer rapidement des vidéos de démonstration, d'onboarding ou de campagnes d'acquisition sans dépendre d'une équipe créative interne.
+
+---
+
+## 🚀 Déploiement
+
+### Architecture cible
+
+```
+VPS Ubuntu 22.04+
+├── Coolify (orchestration containers)
+│   ├── VideoGen API  (Docker · port 8000)
+│   └── n8n           (Docker · port 5678)
+└── Traefik (HTTPS · reverse proxy automatique)
+```
 
 ### Prérequis
 
-- VPS Ubuntu 22.04+ (2 Go RAM minimum)
+- VPS Ubuntu 22.04+ — **2 Go RAM minimum** (4 Go recommandés)
 - [Coolify](https://coolify.io) installé
-- Clés API : Anthropic, ElevenLabs, Kling AI, Pexels, Creatomate
-- Compte Google Cloud (Drive + Sheets API)
+- Clés API : [Anthropic](https://console.anthropic.com) · [ElevenLabs](https://elevenlabs.io) · [Kling AI](https://klingai.com) · [Pexels](https://www.pexels.com/api/) · [Creatomate](https://creatomate.com)
+- Google Cloud : Drive + Sheets API (compte de service JSON)
 
-### Variables d'environnement requises
+### Variables d'environnement
 
 ```env
-API_SECRET_KEY=         # Clé secrète partagée n8n ↔ API
-ANTHROPIC_API_KEY=      # Claude AI
-ELEVENLABS_API_KEY=     # ElevenLabs
+# Sécurité
+API_SECRET_KEY=                    # Clé partagée n8n ↔ API
+
+# IA
+ANTHROPIC_API_KEY=
+ELEVENLABS_API_KEY=
 ELEVENLABS_DEFAULT_VOICE_ID=
-KLING_ACCESS_KEY=       # Kling AI
+KLING_ACCESS_KEY=
 KLING_SECRET_KEY=
-PEXELS_API_KEY=         # Pexels
-CREATOMATE_API_KEY=     # Creatomate
-GOOGLE_DRIVE_FOLDER_ID= # Dossier Drive de livraison
-GOOGLE_SERVICE_ACCOUNT= # JSON service account (base64)
-SENTRY_DSN=             # Sentry (optionnel)
+
+# Médias & Assemblage
+PEXELS_API_KEY=
+CREATOMATE_API_KEY=
+
+# Google
+GOOGLE_DRIVE_FOLDER_ID=
+GOOGLE_SERVICE_ACCOUNT=            # JSON service account encodé en base64
+
+# Optionnel
+SENTRY_DSN=                        # Monitoring erreurs production
+API_BASE_URL=                      # URL publique de l'API
 ```
 
 ### Lancer en local
@@ -157,47 +201,74 @@ SENTRY_DSN=             # Sentry (optionnel)
 ```bash
 pip install -r requirements.txt
 uvicorn app.main:app --reload
+# → http://localhost:8000/docs
 ```
 
 ### Lancer les tests
 
 ```bash
 pytest tests/ -v
+# 71 tests · ~10 secondes
+```
+
+### Déployer via Coolify
+
+1. Connecter le repo GitHub à Coolify
+2. Sélectionner le `Dockerfile`
+3. Ajouter les variables d'environnement
+4. Déployer — Traefik gère le HTTPS automatiquement
+
+---
+
+## 📡 Endpoints API
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `POST` | `/generate` | Lance un pipeline de génération vidéo |
+| `GET` | `/status/{job_id}` | Statut temps réel d'un job |
+| `GET` | `/jobs` | Liste tous les jobs en mémoire |
+| `GET` | `/voices` | Catalogue des voix ElevenLabs disponibles |
+| `POST` | `/test-voice-speed` | Génère 4 audios aux vitesses 1.0 / 1.2 / 1.5 / 2.0 (0 crédit Creatomate) |
+| `GET` | `/review/{job_id}` | Page de review des prompts Kling avant rendu |
+| `POST` | `/review/{job_id}/relaunch` | Relance le pipeline avec prompts modifiés |
+| `GET` | `/monitor` | Dashboard HTML de monitoring temps réel |
+| `GET` | `/docs` | Documentation Swagger interactive |
+
+---
+
+## 📁 Structure du projet
+
+```
+video-api/
+├── app/
+│   ├── main.py             # FastAPI : endpoints, pipeline, queue de jobs
+│   ├── claude.py           # Analyse script → structure JSON + prompts B-roll
+│   ├── elevenlabs.py       # Génération voix off + timestamps mot à mot
+│   ├── kling.py            # Génération clips B-roll par prompt
+│   ├── library.py          # Cascade B-roll : local → Pexels → Kling
+│   ├── creatomate.py       # Assemblage vidéo finale
+│   ├── script_parser.py    # Parser format script PLAN N — 0:00 — 0:05
+│   ├── review.py           # Page review + relaunch des prompts Kling
+│   ├── voice_test.py       # Endpoint test vitesse voix (audio uniquement)
+│   ├── models.py           # Schémas Pydantic
+│   ├── config.py           # Configuration centralisée
+│   └── errors.py           # Gestion d'erreurs unifiée
+├── tests/                  # 71 tests pytest
+├── n8n/
+│   ├── LANCEMENT TACHES v2.json    # Workflow déclencheur (Schedule → API)
+│   ├── FINALISATION.json           # Workflow résultat (Webhook → Sheets)
+│   └── TEST VITESSE VOIX.json      # Test vitesse voix autonome (sans nous)
+├── docs/
+│   ├── deployment.md               # Guide déploiement VPS complet
+│   ├── n8n-setup.md                # Configuration workflows n8n
+│   └── guide-client.md             # Manuel d'utilisation opérateur
+├── Dockerfile
+├── gunicorn.conf.py
+└── pyproject.toml
 ```
 
 ---
 
-## Dashboard de monitoring
-
-Accessible via `/monitor?key=VOTRE_CLE`
-
-- **Onglet Pipelines** — suivi temps réel de chaque vidéo en cours
-- **Onglet Voix** — catalogue avec lecteur audio et copie d'ID
-
----
-
-## Endpoints API
-
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| `POST` | `/generate` | Lance un pipeline de génération |
-| `GET` | `/jobs` | Liste tous les jobs en mémoire |
-| `GET` | `/status/{job_id}` | Statut d'un job spécifique |
-| `GET` | `/voices` | Catalogue des voix disponibles |
-| `GET` | `/monitor` | Dashboard HTML |
-| `GET` | `/docs` | Documentation Swagger |
-
----
-
-## Stratégies B-roll
-
-| Stratégie | Source clips | Coût estimé/vidéo |
-|-----------|-------------|-------------------|
-| **A** | Kling AI uniquement | ~6–14 $ |
-| **B** | Bibliothèque → Pexels → Kling | ~2,50 $ (mois 2+) |
-
----
-
-## Licence
+## 📄 Licence
 
 Projet privé — tous droits réservés.
