@@ -32,7 +32,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{$json.type}}",
+                    "leftValue": "={{$json.body.type}}",
                     "rightValue": "success",
                     "operator": {
                       "type": "string",
@@ -55,7 +55,7 @@
                 "conditions": [
                   {
                     "id": "e33469ef-20cf-4e7e-8800-3b17056175d7",
-                    "leftValue": "={{$json.type}}",
+                    "leftValue": "={{$json.body.type}}",
                     "rightValue": "blocking_error",
                     "operator": {
                       "type": "string",
@@ -97,10 +97,10 @@
           "mappingMode": "defineBelow",
           "value": {
             "Statut": "Livré",
-            "Lien output": "={{ $json['drive_url'] || '' }}",
-            "Statut detail": "={{ $json['message'] || '' }}",
-            "Lien review": "={{ $json['review_url'] || '' }}",
-            "row_number": "={{ $json['row_number'] }}"
+            "Lien output": "={{ $json.body['drive_url'] || '' }}",
+            "Statut detail": "={{ $json.body['message'] || '' }}",
+            "Lien review": "={{ $json.body['review_url'] || '' }}",
+            "row_number": "={{ $json.body['row_number'] }}"
           },
           "matchingColumns": [
             "row_number"
@@ -261,8 +261,8 @@
           "mappingMode": "defineBelow",
           "value": {
             "Statut": "Erreur",
-            "Statut detail": "={{ $json['message'] || '' }}",
-            "row_number": "={{ $json['row_number'] }}"
+            "Statut detail": "={{ $json.body['message'] || '' }}",
+            "row_number": "={{ $json.body['row_number'] }}"
           },
           "matchingColumns": [
             "row_number"
