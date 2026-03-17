@@ -293,6 +293,8 @@ class CreatomateRenderRequest(BaseModel):
     )
     # Multiplicateur de vitesse audio appliqué dans Creatomate (pour voice_speed > 1.2)
     audio_speed: float = Field(1.0, ge=0.5, le=3.0, description="Accélération audio Creatomate (1.0 = normal)")
+    # Durées par section (section_id → durée en secondes) pour caler chaque clip exactement
+    section_durations: dict[int, float] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_clips_ordered(self) -> "CreatomateRenderRequest":

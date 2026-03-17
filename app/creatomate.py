@@ -70,6 +70,7 @@ async def assemble_video(
     audio_speed = row.voice_speed / eleven_speed if row.voice_speed > 1.2 else 1.0
 
     # template_id factice (modèle Pydantic l'exige, non utilisé dans le payload source)
+    section_durations = {s.id: float(s.duration) for s in script_analysis.sections}
     request = CreatomateRenderRequest(
         template_id="source",
         audio_url=elevenlabs_result.audio_path,
@@ -81,6 +82,7 @@ async def assemble_video(
         format=row.format,
         target_duration_seconds=elevenlabs_result.audio_duration_seconds / audio_speed,
         audio_speed=audio_speed,
+        section_durations=section_durations,
     )
 
     last_error: Exception | None = None
@@ -208,19 +210,29 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
     elements: list[dict] = []
 
     # ── Track 1 : Clips vidéo séquentiels ────────────────────────────────────
-    # Même track = Creatomate les joue dans l'ordre sans time offset manuel.
+    # time + duration explicites : chaque clip joue exactement la durée de sa section.
+    # Sans ça, Creatomate utilise la durée native du fichier source (Pexels = 10-60s).
     valid_clips = 0
+    current_time = 0.0
     for clip in sorted(request.clips, key=lambda c: c.section_id):
+        section_dur = request.section_durations.get(clip.section_id)
         if not clip.url:
             logger.warning("Clip section=%d sans URL — ignoré", clip.section_id)
+            if section_dur:
+                current_time += section_dur
             continue
-        elements.append({
+        clip_element: dict = {
             "type": "video",
             "track": 1,
             "source": clip.url,
             "fit": "cover",
-            "volume": "0%",  # Muet — seule la voix off compte
-        })
+            "volume": "0%",
+            "time": round(current_time, 3),
+        }
+        if section_dur:
+            clip_element["duration"] = section_dur
+        elements.append(clip_element)
+        current_time += section_dur if section_dur else 5.0
         valid_clips += 1
 
     logger.info(
