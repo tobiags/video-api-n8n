@@ -46,9 +46,9 @@
         704
       ],
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "WuuB2fQnxWavSbfO",
-          "name": "Google Sheets account"
+        "googleServiceAccountApi": {
+          "id": "GoogleSheetsSA",
+          "name": "Google Sheets SA"
         }
       }
     },
@@ -124,9 +124,9 @@
         704
       ],
       "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "WuuB2fQnxWavSbfO",
-          "name": "Google Sheets account"
+        "googleServiceAccountApi": {
+          "id": "GoogleSheetsSA",
+          "name": "Google Sheets SA"
         }
       }
     },
