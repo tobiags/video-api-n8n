@@ -5,14 +5,14 @@ Endpoint :
   POST /test-voice-speed
 
 Génère 4 fichiers audio ElevenLabs aux vitesses 1.0 / 1.2 / 1.5 / 2.0
-et retourne leurs URLs publiques. Théo écoute, choisit, puis lance UNE
-vidéo complète avec la valeur choisie dans voice_speed.
+et retourne les données audio encodées en base64 (data URI).
+Aucune requête externe nécessaire pour lire les fichiers : zéro problème
+de certificat SSL, CORS ou mixed content.
 
 Pourquoi 0 crédit Creatomate : aucun rendu vidéo, uniquement ElevenLabs.
 """
-import asyncio
+import base64
 import logging
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
@@ -25,24 +25,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["voice-test"])
 
-# Vitesses de test : 1.0, 1.2 (max ElevenLabs natif), 1.5, 2.0
-# Pour 1.5 et 2.0 : ElevenLabs tourne à 1.2, l'audio sera accéléré côté Creatomate
-# mais pour ce test on compare juste les voix à 1.0 et 1.2 natif + indication
 _TEST_SPEEDS = [1.0, 1.2, 1.5, 2.0]
 
 
 class VoiceSpeedTestRequest(BaseModel):
     """Payload pour POST /test-voice-speed."""
-    script: str = Field(..., min_length=10, description="Texte à synthétiser (extrait ou script complet)")
+    script: str = Field(..., min_length=10, description="Texte à synthétiser")
     voice_id: str = Field(..., description="ID du clone vocal ElevenLabs")
 
 
 class VoiceSpeedTestResult(BaseModel):
     """Un fichier audio généré pour une vitesse donnée."""
     speed: float
-    elevenlabs_speed: float  # Vitesse réelle envoyée à ElevenLabs (max 1.2)
-    creatomate_multiplier: float  # Multiplicateur Creatomate supplémentaire (si speed > 1.2)
-    audio_url: str
+    elevenlabs_speed: float
+    creatomate_multiplier: float
+    audio_data_uri: str  # data:audio/mpeg;base64,... — jouable directement dans <audio>
     duration_seconds: float
 
 
@@ -64,10 +61,10 @@ async def test_voice_speed(
 ) -> VoiceSpeedTestResponse:
     """
     Génère 4 fichiers audio aux vitesses 1.0 / 1.2 / 1.5 / 2.0.
+    Retourne les données audio en base64 (data URI) — aucune requête externe requise.
     Aucun rendu Creatomate = 0 crédit Creatomate consommé.
     """
     http_client = request.app.state.http_client
-    api_base = settings.API_BASE_URL.rstrip("/") if settings.API_BASE_URL else ""
 
     async def _generate_one(speed: float) -> VoiceSpeedTestResult:
         eleven_speed = min(speed, 1.2)
@@ -80,21 +77,17 @@ async def test_voice_speed(
             settings=settings,
             voice_speed=speed,
         )
-        audio_filename = Path(result.audio_path).name
-        audio_url = (
-            f"{api_base}/audio/{audio_filename}"
-            if api_base
-            else f"file://{result.audio_path}"
-        )
+        audio_bytes = Path(result.audio_path).read_bytes()
+        audio_data_uri = "data:audio/mpeg;base64," + base64.b64encode(audio_bytes).decode()
+
         return VoiceSpeedTestResult(
             speed=speed,
             elevenlabs_speed=eleven_speed,
             creatomate_multiplier=creatomate_mult,
-            audio_url=audio_url,
+            audio_data_uri=audio_data_uri,
             duration_seconds=result.audio_duration_seconds,
         )
 
-    # Génération séquentielle pour éviter le rate-limiting ElevenLabs
     results: list[VoiceSpeedTestResult] = []
     for speed in _TEST_SPEEDS:
         logger.info("Génération audio vitesse %.2f...", speed)
