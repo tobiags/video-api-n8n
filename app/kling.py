@@ -133,8 +133,18 @@ async def generate_single_clip(
         logger.info("Kling job créé : task_id=%s section=%d", task_id, section.id)
 
     except httpx.HTTPStatusError as e:
-        if e.response.status_code in (429, 503):
-            raise KlingUnavailableError(f"Kling indisponible : HTTP {e.response.status_code}")
+        if e.response.status_code == 429:
+            if attempt <= settings.KLING_MAX_RETRIES:
+                wait_s = 60 * attempt  # 60s, 120s, 180s
+                logger.warning(
+                    "Kling 429 section %d — rate limit, attente %ds (retry %d/%d)",
+                    section.id, wait_s, attempt, settings.KLING_MAX_RETRIES,
+                )
+                await asyncio.sleep(wait_s)
+                return await generate_single_clip(section, format_, http_client, settings, attempt + 1)
+            raise KlingUnavailableError(f"Kling rate limit persistant après {attempt} tentatives")
+        if e.response.status_code == 503:
+            raise KlingUnavailableError(f"Kling indisponible : HTTP 503")
         raise KlingAPIError(f"Kling create error HTTP {e.response.status_code} : {e}")
 
     # Polling loop

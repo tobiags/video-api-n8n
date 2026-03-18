@@ -65,8 +65,9 @@ class Settings(BaseSettings):
     KLING_MODEL: str = "kling-v1-6"
     KLING_DURATION: int = 5          # durée cible par clip en secondes
     KLING_NATIVE_AUDIO: bool = False # désactivé : on n'a pas besoin de l'audio IA Kling (économie crédits)
-    # Limite API officielle : 5 jobs en parallèle (PRD §3 Stratégie A)
-    KLING_MAX_PARALLEL_JOBS: int = 5
+    # Limite API officielle : max 5 en parallèle, mais le rate limit burst est ~2/s
+    # Garder à 2 pour éviter les 429 en rafale sur 14 clips simultanés
+    KLING_MAX_PARALLEL_JOBS: int = 2
     # Polling toutes les 30 sec, timeout 10 min par clip (PRD §4.3)
     KLING_POLLING_INTERVAL: float = 30.0
     KLING_CLIP_TIMEOUT: int = 600    # 10 minutes max par clip
