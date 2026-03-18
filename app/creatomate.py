@@ -212,25 +212,10 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
     # ── Track 1 : Clips vidéo séquentiels ────────────────────────────────────
     # time + duration explicites : chaque clip joue exactement la durée de sa section.
     # Sans ça, Creatomate utilise la durée native du fichier source (Pexels = 10-60s).
-    #
-    # Problème : le script définit 70s (14 × 5s) mais ElevenLabs génère ~51s d'audio.
-    # Solution : on scalle proportionnellement les durées de section pour que la somme
-    # des clips = durée audio réelle → tous les clips sont visibles dans la vidéo finale.
-    total_script_dur = sum(request.section_durations.values()) if request.section_durations else 0.0
-    if total_script_dur > 0 and request.target_duration_seconds and total_script_dur > request.target_duration_seconds * 1.05:
-        dur_scale = request.target_duration_seconds / total_script_dur
-        section_durations_eff = {k: v * dur_scale for k, v in request.section_durations.items()}
-        logger.info(
-            "Creatomate : durées sections scalées %.2fx (script=%.1fs, audio=%.1fs)",
-            dur_scale, total_script_dur, request.target_duration_seconds,
-        )
-    else:
-        section_durations_eff = request.section_durations
-
     valid_clips = 0
     current_time = 0.0
     for clip in sorted(request.clips, key=lambda c: c.section_id):
-        section_dur = section_durations_eff.get(clip.section_id)
+        section_dur = request.section_durations.get(clip.section_id)
         if not clip.url:
             logger.warning("Clip section=%d sans URL — ignoré", clip.section_id)
             if section_dur:
@@ -245,7 +230,7 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
             "time": round(current_time, 3),
         }
         if section_dur:
-            clip_element["duration"] = round(section_dur, 3)
+            clip_element["duration"] = section_dur
         elements.append(clip_element)
         current_time += section_dur if section_dur else 5.0
         valid_clips += 1
