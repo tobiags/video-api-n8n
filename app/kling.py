@@ -134,15 +134,28 @@ async def generate_single_clip(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
-            # Log du body complet pour diagnostiquer (crédits épuisés vs rate limit)
+            # Log du body complet pour diagnostiquer la cause exacte
             try:
                 error_body = e.response.json()
+                error_code = error_body.get("code")
+                error_msg = error_body.get("message", "")
             except Exception:
                 error_body = e.response.text
+                error_code = None
+                error_msg = str(error_body)
+
             logger.error(
-                "Kling 429 section %d — body complet: %s",
-                section.id, error_body,
+                "Kling 429 section %d — code=%s message=%s",
+                section.id, error_code, error_msg,
             )
+
+            # code 1102 = solde API insuffisant — retry inutile, échouer immédiatement
+            if error_code == 1102:
+                raise KlingUnavailableError(
+                    f"Kling solde API insuffisant (code 1102) — recharger les crédits sur app.klingai.com/global/dev"
+                )
+
+            # Autres 429 = rate limit réel → retry avec backoff
             if attempt <= settings.KLING_MAX_RETRIES:
                 wait_s = 60 * attempt  # 60s, 120s, 180s
                 logger.warning(
