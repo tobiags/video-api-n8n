@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # ── Kling AI ─────────────────────────────────────────────────────────────
     KLING_ACCESS_KEY: SecretStr = Field(...)
     KLING_SECRET_KEY: SecretStr = Field(...)
-    KLING_BASE_URL: str = "https://api.klingai.com"
+    KLING_BASE_URL: str = "https://api-singapore.klingai.com"
     KLING_MODEL: str = "kling-v1-6"
     KLING_DURATION: int = 5          # durée cible par clip en secondes
     KLING_NATIVE_AUDIO: bool = False # désactivé : on n'a pas besoin de l'audio IA Kling (économie crédits)

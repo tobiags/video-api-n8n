@@ -134,6 +134,15 @@ async def generate_single_clip(
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
+            # Log du body complet pour diagnostiquer (crédits épuisés vs rate limit)
+            try:
+                error_body = e.response.json()
+            except Exception:
+                error_body = e.response.text
+            logger.error(
+                "Kling 429 section %d — body complet: %s",
+                section.id, error_body,
+            )
             if attempt <= settings.KLING_MAX_RETRIES:
                 wait_s = 60 * attempt  # 60s, 120s, 180s
                 logger.warning(
