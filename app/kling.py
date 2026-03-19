@@ -156,7 +156,7 @@ async def generate_single_clip(
         poll_data = poll_resp.json()["data"]
         status_str = poll_data["status"]
 
-        if status_str == "Completed":
+        if status_str in ("Completed", "completed"):
             output = poll_data.get("output", {})
             # PiAPI retourne video_url soit dans output.video soit dans output.works[0]
             video_url = output.get("video") or ""
@@ -178,7 +178,7 @@ async def generate_single_clip(
                 prompt_used=section.broll_prompt,
             )
 
-        if status_str == "Failed":
+        if status_str in ("Failed", "failed"):
             error_msg = poll_data.get("error", {}).get("message", "unknown")
             if attempt < settings.KLING_MAX_RETRIES:
                 logger.warning(
