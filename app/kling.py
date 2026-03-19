@@ -192,8 +192,9 @@ async def generate_single_clip(
                 f"Section {section.id} Kling failed après {attempt} tentatives : {error_msg}"
             )
 
-        logger.debug(
-            "Kling polling task=%s status=%s elapsed=%.0fs", task_id, status_str, elapsed
+        logger.info(
+            "Kling polling task=%s status=%s elapsed=%.0fs section=%d",
+            task_id, status_str, elapsed, section.id,
         )
 
     raise KlingClipTimeoutError(
