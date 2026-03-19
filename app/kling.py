@@ -2,19 +2,16 @@
 kling.py — Module génération clips IA asynchrone (PRD §4.3)
 
 Responsabilités :
-  - Lancer N jobs Kling en parallèle (asyncio.gather)
+  - Lancer N jobs Kling via PiAPI (revendeur officiel Kling)
   - Polling individuel toutes les 30s, timeout 10 min par clip
   - Retry auto x3 par clip, puis fallback Pexels sur échec définitif
-  - Respecter la limite de 5 jobs parallèles (API officielle)
-  - Authentification JWT (AccessKey + SecretKey Kling)
+  - Authentification via x-api-key (PiAPI)
 """
 import asyncio
 import logging
-import time
 from collections.abc import Callable
 
 import httpx
-import jwt
 
 from app.config import Settings
 from app.errors import KlingAPIError, KlingClipTimeoutError, KlingMaxRetriesError, KlingUnavailableError
@@ -23,15 +20,8 @@ from app.models import ClipSource, ScriptSection, VideoClip, VideoFormat
 logger = logging.getLogger(__name__)
 
 
-def _build_kling_jwt(access_key: str, secret_key: str) -> str:
-    now = int(time.time())
-    payload = {"iss": access_key, "exp": now + 1800, "nbf": now - 5}
-    return jwt.encode(payload, secret_key, algorithm="HS256")
-
-
-def _kling_headers(settings: Settings) -> dict:
-    token = _build_kling_jwt(settings.kling_access_key, settings.kling_secret_key)
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+def _piapi_headers(settings: Settings) -> dict:
+    return {"x-api-key": settings.piapi_api_key, "Content-Type": "application/json"}
 
 
 async def generate_clips(
@@ -116,48 +106,30 @@ async def generate_single_clip(
 
     try:
         create_resp = await http_client.post(
-            f"{settings.KLING_BASE_URL}/v1/videos/text2video",
-            headers=_kling_headers(settings),
+            f"{settings.KLING_BASE_URL}/api/v1/task",
+            headers=_piapi_headers(settings),
             json={
-                "model_name": settings.KLING_MODEL,
-                "prompt": section.broll_prompt,
-                "duration": settings.KLING_DURATION,
-                "aspect_ratio": aspect,
-                "with_audio": settings.KLING_NATIVE_AUDIO,
+                "model": "kling",
+                "task_type": "video_generation",
+                "input": {
+                    "prompt": section.broll_prompt,
+                    "duration": settings.KLING_DURATION,
+                    "aspect_ratio": aspect,
+                    "version": settings.PIAPI_KLING_VERSION,
+                    "mode": "std",
+                },
             },
             timeout=30.0,
         )
         create_resp.raise_for_status()
         data = create_resp.json()
         task_id = data["data"]["task_id"]
-        logger.info("Kling job créé : task_id=%s section=%d", task_id, section.id)
+        logger.info("Kling job créé (PiAPI) : task_id=%s section=%d", task_id, section.id)
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 429:
-            # Log du body complet pour diagnostiquer la cause exacte
-            try:
-                error_body = e.response.json()
-                error_code = error_body.get("code")
-                error_msg = error_body.get("message", "")
-            except Exception:
-                error_body = e.response.text
-                error_code = None
-                error_msg = str(error_body)
-
-            logger.error(
-                "Kling 429 section %d — code=%s message=%s",
-                section.id, error_code, error_msg,
-            )
-
-            # code 1102 = solde API insuffisant — retry inutile, échouer immédiatement
-            if error_code == 1102:
-                raise KlingUnavailableError(
-                    f"Kling solde API insuffisant (code 1102) — recharger les crédits sur app.klingai.com/global/dev"
-                )
-
-            # Autres 429 = rate limit réel → retry avec backoff
             if attempt <= settings.KLING_MAX_RETRIES:
-                wait_s = 60 * attempt  # 60s, 120s, 180s
+                wait_s = 60 * attempt
                 logger.warning(
                     "Kling 429 section %d — rate limit, attente %ds (retry %d/%d)",
                     section.id, wait_s, attempt, settings.KLING_MAX_RETRIES,
@@ -176,43 +148,48 @@ async def generate_single_clip(
         elapsed += settings.KLING_POLLING_INTERVAL
 
         poll_resp = await http_client.get(
-            f"{settings.KLING_BASE_URL}/v1/videos/text2video/{task_id}",
-            headers=_kling_headers(settings),
+            f"{settings.KLING_BASE_URL}/api/v1/task/{task_id}",
+            headers=_piapi_headers(settings),
             timeout=15.0,
         )
         poll_resp.raise_for_status()
         poll_data = poll_resp.json()["data"]
-        status_str = poll_data["task_status"]
+        status_str = poll_data["status"]
 
-        if status_str == "succeed":
-            video_url = poll_data["task_result"]["videos"][0]["url"]
-            duration_s = float(
-                poll_data["task_result"]["videos"][0].get("duration", settings.KLING_DURATION)
-            )
+        if status_str == "Completed":
+            output = poll_data.get("output", {})
+            # PiAPI retourne video_url soit dans output.video soit dans output.works[0]
+            video_url = output.get("video") or ""
+            if not video_url:
+                works = output.get("works", [])
+                if works:
+                    video_url = (
+                        works[0].get("video", {}).get("resource_without_watermark")
+                        or works[0].get("video", {}).get("resource", "")
+                    )
             logger.info(
-                "Kling clip OK : task_id=%s section=%d url=%s", task_id, section.id, video_url
+                "Kling clip OK (PiAPI) : task_id=%s section=%d url=%s", task_id, section.id, video_url
             )
             return VideoClip(
                 section_id=section.id,
                 source=ClipSource.KLING,
                 url=video_url,
-                duration_seconds=duration_s,
+                duration_seconds=float(settings.KLING_DURATION),
                 prompt_used=section.broll_prompt,
             )
 
-        if status_str == "failed":
+        if status_str == "Failed":
+            error_msg = poll_data.get("error", {}).get("message", "unknown")
             if attempt < settings.KLING_MAX_RETRIES:
                 logger.warning(
-                    "Kling clip failed, retry %d/%d section %d",
-                    attempt,
-                    settings.KLING_MAX_RETRIES,
-                    section.id,
+                    "Kling clip Failed (%s), retry %d/%d section %d",
+                    error_msg, attempt, settings.KLING_MAX_RETRIES, section.id,
                 )
                 return await generate_single_clip(
                     section, format_, http_client, settings, attempt + 1
                 )
             raise KlingMaxRetriesError(
-                f"Section {section.id} Kling failed après {attempt} tentatives"
+                f"Section {section.id} Kling failed après {attempt} tentatives : {error_msg}"
             )
 
         logger.debug(

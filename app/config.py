@@ -58,11 +58,13 @@ class Settings(BaseSettings):
     # Valeur recommandée : 0.85 pour une voix pub "posée" et professionnelle
     ELEVENLABS_VOICE_SPEED: float = Field(0.85, ge=0.7, le=1.2)
 
-    # ── Kling AI ─────────────────────────────────────────────────────────────
-    KLING_ACCESS_KEY: SecretStr = Field(...)
-    KLING_SECRET_KEY: SecretStr = Field(...)
-    KLING_BASE_URL: str = "https://api-singapore.klingai.com"
+    # ── Kling AI (via PiAPI — revendeur officiel) ────────────────────────────
+    KLING_ACCESS_KEY: SecretStr = Field(default="unused")
+    KLING_SECRET_KEY: SecretStr = Field(default="unused")
+    PIAPI_API_KEY: SecretStr = Field(..., description="Clé API PiAPI.ai pour accès Kling")
+    KLING_BASE_URL: str = "https://api.piapi.ai"
     KLING_MODEL: str = "kling-v1-6"
+    PIAPI_KLING_VERSION: str = "1.6"   # version Kling : 1.6, 2.1, 2.1-master, 2.5, 2.6
     KLING_DURATION: int = 5          # durée cible par clip en secondes
     KLING_NATIVE_AUDIO: bool = False # désactivé : on n'a pas besoin de l'audio IA Kling (économie crédits)
     # Limite API officielle : max 5 en parallèle, mais le rate limit burst déclenche 429
@@ -184,6 +186,10 @@ class Settings(BaseSettings):
     @property
     def kling_secret_key(self) -> str:
         return self.KLING_SECRET_KEY.get_secret_value()
+
+    @property
+    def piapi_api_key(self) -> str:
+        return self.PIAPI_API_KEY.get_secret_value()
 
     @property
     def pexels_api_key(self) -> str:
