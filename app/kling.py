@@ -116,7 +116,7 @@ async def generate_single_clip(
                     "duration": settings.KLING_DURATION,
                     "aspect_ratio": aspect,
                     "version": settings.PIAPI_KLING_VERSION,
-                    "mode": "std",
+                    "mode": "pro",
                 },
             },
             timeout=30.0,

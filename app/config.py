@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     PIAPI_API_KEY: SecretStr = Field(..., description="Clé API PiAPI.ai pour accès Kling")
     KLING_BASE_URL: str = "https://api.piapi.ai"
     KLING_MODEL: str = "kling-v1-6"
-    PIAPI_KLING_VERSION: str = "1.6"   # version Kling : 1.6, 2.1, 2.1-master, 2.5, 2.6
+    PIAPI_KLING_VERSION: str = "2.1"     # v2.1 pro = meilleur ratio qualité/prix ($0.46/clip vs $0.26 std)
     KLING_DURATION: int = 5          # durée cible par clip en secondes
     KLING_NATIVE_AUDIO: bool = False # désactivé : on n'a pas besoin de l'audio IA Kling (économie crédits)
     # PiAPI gère sa propre file d'attente — on peut lancer plusieurs clips en parallèle
