@@ -121,7 +121,7 @@ class Settings(BaseSettings):
 
     # ── HTTP Client ──────────────────────────────────────────────────────────
     HTTP_TIMEOUT_DEFAULT: float = 30.0
-    HTTP_TIMEOUT_VIDEO_GEN: float = 1200.0  # Pour Kling/Creatomate polling (CREATOMATE_RENDER_TIMEOUT=900 + overhead)
+    HTTP_TIMEOUT_VIDEO_GEN: float = 3600.0  # 1h : Kling ~20min (14 clips×3 parallèles) + Creatomate ~15min
     HTTP_MAX_CONNECTIONS: int = 20
     HTTP_MAX_KEEPALIVE: int = 10
 
