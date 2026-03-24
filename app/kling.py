@@ -113,10 +113,12 @@ async def generate_single_clip(
                 "task_type": "video_generation",
                 "input": {
                     "prompt": section.broll_prompt,
+                    "negative_prompt": settings.KLING_NEGATIVE_PROMPT,
                     "duration": settings.KLING_DURATION,
                     "aspect_ratio": aspect,
                     "version": settings.PIAPI_KLING_VERSION,
                     "mode": "pro",
+                    "cfg_scale": settings.KLING_CFG_SCALE,
                 },
             },
             timeout=30.0,
