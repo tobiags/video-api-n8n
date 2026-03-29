@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     PIAPI_API_KEY: SecretStr = Field(..., description="Clé API PiAPI.ai pour accès Kling")
     KLING_BASE_URL: str = "https://api.piapi.ai"
     KLING_MODEL: str = "kling-v1-6"
-    PIAPI_KLING_VERSION: str = "2.1"     # v2.1 pro = meilleur ratio qualité/prix ($0.46/clip vs $0.26 std)
+    PIAPI_KLING_VERSION: str = "1.6"     # v1.6 pro = version stable sur PiAPI ($0.28/clip — v2.1 non supporté)
     KLING_CFG_SCALE: float = 0.7         # adhérence au prompt (0.0-1.0, défaut 0.5, 0.7 = moins d'artefacts)
     KLING_NEGATIVE_PROMPT: str = (
         "deformed, distorted, disfigured, poorly drawn face, bad anatomy, "

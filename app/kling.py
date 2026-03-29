@@ -141,7 +141,12 @@ async def generate_single_clip(
             raise KlingUnavailableError(f"Kling rate limit persistant après {attempt} tentatives")
         if e.response.status_code == 503:
             raise KlingUnavailableError(f"Kling indisponible : HTTP 503")
-        raise KlingAPIError(f"Kling create error HTTP {e.response.status_code} : {e}")
+        body = ""
+        try:
+            body = e.response.text[:500]
+        except Exception:
+            pass
+        raise KlingAPIError(f"Kling create error HTTP {e.response.status_code} : {e} | body={body}")
 
     # Polling loop
     elapsed = 0.0
