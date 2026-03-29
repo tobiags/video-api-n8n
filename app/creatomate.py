@@ -250,7 +250,7 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
         "audio_fade_out": 0.5,
     }
     if request.audio_speed != 1.0:
-        voiceover_element["speed"] = round(request.audio_speed, 4)
+        voiceover_element["speed"] = round(request.audio_speed * 100, 1)  # Creatomate: 50–200 (%), not float multiplier
     elements.append(voiceover_element)
 
     # ── Track 3 : Musique de fond (optionnel) ─────────────────────────────────
