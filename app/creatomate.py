@@ -71,6 +71,14 @@ async def assemble_video(
 
     # template_id factice (modèle Pydantic l'exige, non utilisé dans le payload source)
     section_durations = {s.id: float(s.duration) for s in script_analysis.sections}
+
+    # Durée vidéo = max(durée totale script, durée audio après vitesse)
+    # Sans ce max, la composition serait cappée à ~32s pour 14 clips × 5s = 70s,
+    # et les derniers plans n'apparaîtraient jamais.
+    total_script_duration = float(script_analysis.total_duration)
+    audio_duration_at_speed = elevenlabs_result.audio_duration_seconds / audio_speed
+    target_duration = max(total_script_duration, audio_duration_at_speed)
+
     request = CreatomateRenderRequest(
         template_id="source",
         audio_url=elevenlabs_result.audio_path,
@@ -80,7 +88,7 @@ async def assemble_video(
         cta_text=row.cta if settings.CREATOMATE_SHOW_CTA else "",
         music_url=row.music_url,
         format=row.format,
-        target_duration_seconds=elevenlabs_result.audio_duration_seconds / audio_speed,
+        target_duration_seconds=target_duration,
         audio_speed=audio_speed,
         section_durations=section_durations,
     )
