@@ -92,7 +92,7 @@ class Settings(BaseSettings):
     # Plus utilisés — on passe à l'approche "source" dynamique (pas de templates statiques)
     CREATOMATE_TEMPLATE_VERTICAL: str = Field("", description="Obsolète — approche source dynamique")
     CREATOMATE_TEMPLATE_HORIZONTAL: str = Field("", description="Obsolète — approche source dynamique")
-    CREATOMATE_SHOW_CTA: bool = False    # True pour réactiver le texte CTA overlay
+    CREATOMATE_SHOW_CTA: bool = True     # False pour désactiver le texte CTA overlay
     CREATOMATE_POLLING_INTERVAL: float = 15.0
     CREATOMATE_RENDER_TIMEOUT: int = 900  # 15 min max
     CREATOMATE_MAX_RETRIES: int = 2

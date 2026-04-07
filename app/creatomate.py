@@ -72,12 +72,16 @@ async def assemble_video(
     # template_id factice (modèle Pydantic l'exige, non utilisé dans le payload source)
     section_durations = {s.id: float(s.duration) for s in script_analysis.sections}
 
-    # Durée vidéo = max(durée totale script, durée audio après vitesse)
-    # Sans ce max, la composition serait cappée à ~32s pour 14 clips × 5s = 70s,
-    # et les derniers plans n'apparaîtraient jamais.
+    # Durée cible = durée audio réelle (la voix off est la référence).
+    # Si le script est plus long que l'audio, on scale les durées des sections
+    # proportionnellement pour que TOUS les clips apparaissent ET que la vidéo
+    # se termine avec la voix (pas de silence à la fin).
     total_script_duration = float(script_analysis.total_duration)
     audio_duration_at_speed = elevenlabs_result.audio_duration_seconds / audio_speed
-    target_duration = max(total_script_duration, audio_duration_at_speed)
+    if total_script_duration > 0 and audio_duration_at_speed < total_script_duration:
+        scale = audio_duration_at_speed / total_script_duration
+        section_durations = {sid: round(dur * scale, 3) for sid, dur in section_durations.items()}
+    target_duration = audio_duration_at_speed
 
     request = CreatomateRenderRequest(
         template_id="source",
