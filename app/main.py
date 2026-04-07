@@ -59,6 +59,7 @@ from app.elevenlabs import generate_voiceover
 from app.kling import generate_clips
 from app.library import select_library_clips
 from app.creatomate import assemble_video
+from app.google_drive import upload_video_to_drive
 from app.review import router as review_router
 from app.voice_test import router as voice_test_router
 from app.script_parser import detect_preformatted, parse_preformatted
@@ -671,13 +672,19 @@ async def run_pipeline(
                 job_id, render_result.render_id, render_result.video_url,
             )
 
-            # ── Étape 5 : Notification n8n (Drive upload + Sheets update) ─────────
+            # ── Étape 5 : Upload Google Drive ─────────────────────────────────────
             _update_job_progress(
                 job, JobStatus.UPLOADING,
-                "Notification n8n — upload Drive et mise à jour Sheets", 95,
+                "Upload Google Drive", 95,
             )
 
-            # n8n reçoit l'URL Creatomate, upload sur Drive, met à jour Sheets
+            filename = f"{row.row_id}_{job_id[:8]}.mp4"
+            drive_url = await upload_video_to_drive(
+                render_result.video_url, filename, http_client, settings
+            )
+            job.drive_url = drive_url
+
+            # ── Étape 6 : Notification n8n (Sheets update) ───────────────────────
             if request.webhook_url:
                 await _notify_n8n(
                     request.webhook_url,
@@ -687,7 +694,7 @@ async def run_pipeline(
                         row_id=row.row_id,
                         row_number=row_number,
                         message=f"Pub générée avec succès — durée {render_result.duration_seconds:.0f}s",
-                        drive_url=render_result.video_url,
+                        drive_url=drive_url,
                         review_url=job.review_url,
                     ),
                     http_client,
@@ -695,7 +702,6 @@ async def run_pipeline(
 
             # ── Terminé ───────────────────────────────────────────────────────────
             job.status = JobStatus.COMPLETED
-            job.drive_url = render_result.video_url  # mis à jour après upload par n8n
             _update_job_progress(job, JobStatus.COMPLETED, "Terminé", 100)
 
     except asyncio.TimeoutError:
