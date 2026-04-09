@@ -56,7 +56,7 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
         "y": "91%",
         "width": "80%",
         "background_color": None,
-        "letter_spacing": "0.04 em",
+        "letter_spacing": "5%",
         "font_style": "italic",
     },
 }
