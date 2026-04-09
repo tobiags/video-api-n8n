@@ -117,6 +117,7 @@ class Settings(BaseSettings):
     SHEETS_COL_CTA: int = 7
     SHEETS_COL_LIEN_OUTPUT: int = 8
     SHEETS_COL_STATUT_DETAIL: int = 9
+    SHEETS_COL_SOUS_TITRES: int = 14   # Colonne O — Style sous-titres (tiktok/classique/cinema ou vide)
 
     # ── Stratégie B — Bibliothèque clips ────────────────────────────────────
     LIBRARY_PATH: str = "/opt/videogen/library/clips"

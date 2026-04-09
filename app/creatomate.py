@@ -28,6 +28,7 @@ from app.models import (
     VideoFormat,
     WordTimestamp,
 )
+from app.subtitles import build_subtitle_elements
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,7 @@ async def assemble_video(
         target_duration_seconds=target_duration,
         audio_speed=audio_speed,
         section_durations=section_durations,
+        subtitle_style=row.subtitle_style,
     )
 
     last_error: Exception | None = None
@@ -311,6 +313,19 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
             "y_anchor": "50%",
             "text_align": "center",
         })
+
+    # ── Track 6 : Sous-titres synchronisés (optionnel) ────────────────────────
+    if request.subtitle_style and request.timestamps:
+        subtitle_elements = build_subtitle_elements(
+            timestamps=request.timestamps,
+            style=request.subtitle_style,
+            track=6,
+        )
+        elements.extend(subtitle_elements)
+        logger.info(
+            "Sous-titres %s ajoutés : %d éléments text",
+            request.subtitle_style.value, len(subtitle_elements),
+        )
 
     # ── Payload racine (format RenderScript /v2) ──────────────────────────────
     # duration = durée audio réelle → cap la composition (évite 7min de clips Pexels)

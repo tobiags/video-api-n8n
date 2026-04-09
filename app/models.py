@@ -58,6 +58,13 @@ class SceneType(str, Enum):
     TUTORIAL = "tutorial"
 
 
+class SubtitleStyle(str, Enum):
+    """Style visuel des sous-titres synchronisés. Colonne Sheets 'Sous-titres'."""
+    TIKTOK = "tiktok"       # Bold, 3 mots, position centrale (style viral)
+    CLASSIQUE = "classique" # 5 mots, fond semi-transparent, position basse
+    CINEMA = "cinema"       # Italic, 7 mots, très bas, sans fond (style film)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ENTRÉE — Données depuis Google Sheets via n8n
 # ══════════════════════════════════════════════════════════════════════════════
@@ -76,10 +83,14 @@ class SheetsRow(BaseModel):
     persona: str | None = Field(None, description="Description du protagoniste visuel (genre, âge, apparence)")
     ambiance: str | None = Field(None, description="Style visuel souhaité (tonalité, lumière, palette)")
     voice_speed: float = Field(0.85, ge=0.7, le=2.0, description="Vitesse voix off (0.7–2.0). >1.2 = accélération audio Creatomate en complément d'ElevenLabs max 1.2)")
+    subtitle_style: SubtitleStyle | None = Field(
+        None,
+        description="Style des sous-titres synchronisés (tiktok / classique / cinema). Vide = pas de sous-titres.",
+    )
 
     # I3 fix étendu : strip \r\n et espaces sur tous les champs string venant de Sheets
     # Google Sheets + n8n peuvent inclure des \r\n en fin de cellule (Windows CRLF)
-    @field_validator("voice_id", "script", "cta", "music_url", "logo_url", "persona", "ambiance", mode="before")
+    @field_validator("voice_id", "script", "cta", "music_url", "logo_url", "persona", "ambiance", "subtitle_style", mode="before")
     @classmethod
     def strip_sheets_strings(cls, v: Any) -> Any:
         return v.strip() if isinstance(v, str) else v
@@ -295,6 +306,8 @@ class CreatomateRenderRequest(BaseModel):
     audio_speed: float = Field(1.0, ge=0.5, le=3.0, description="Accélération audio Creatomate (1.0 = normal)")
     # Durées par section (section_id → durée en secondes) pour caler chaque clip exactement
     section_durations: dict[int, float] = Field(default_factory=dict)
+    # Style sous-titres synchronisés (None = pas de sous-titres)
+    subtitle_style: SubtitleStyle | None = None
 
     @model_validator(mode="after")
     def validate_clips_ordered(self) -> "CreatomateRenderRequest":
