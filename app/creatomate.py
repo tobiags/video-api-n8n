@@ -24,6 +24,7 @@ from app.models import (
     ElevenLabsResult,
     ScriptAnalysis,
     SheetsRow,
+    SubtitleStyle,
     VideoClip,
     VideoFormat,
     WordTimestamp,
@@ -96,7 +97,7 @@ async def assemble_video(
         target_duration_seconds=target_duration,
         audio_speed=audio_speed,
         section_durations=section_durations,
-        subtitle_style=row.subtitle_style,
+        subtitle_style=SubtitleStyle.CINEMA,  # DEBUG: hardcodé pour test — à remettre en row.subtitle_style
     )
 
     last_error: Exception | None = None
