@@ -34,7 +34,7 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
         "font_family": "Montserrat",
         "font_weight": "900",
         "font_size": "7.5 vmin",
-        "fill_color": "#CBFF4D",          # Lime jaune-vert — signature CapCut
+        "fill_color": "#ffffff",           # Blanc pur
         "stroke_color": "#000000",
         "stroke_width": "0.6 vmin",
         "y": "75%",
