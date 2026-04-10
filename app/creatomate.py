@@ -97,6 +97,7 @@ async def assemble_video(
         target_duration_seconds=target_duration,
         audio_speed=audio_speed,
         section_durations=section_durations,
+        sections=script_analysis.sections,
         subtitle_style=row.subtitle_style,
     )
 
@@ -316,9 +317,10 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
         })
 
     # ── Track 6 : Sous-titres synchronisés (optionnel) ────────────────────────
-    if request.subtitle_style and request.timestamps:
+    if request.subtitle_style and request.sections:
         subtitle_elements = build_subtitle_elements(
-            timestamps=request.timestamps,
+            sections=request.sections,
+            section_durations=request.section_durations,
             style=request.subtitle_style,
             track=6,
         )

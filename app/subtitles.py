@@ -1,24 +1,19 @@
 """
 subtitles.py — Génération des sous-titres synchronisés pour Creatomate
 
-Approche de segmentation :
-  - Détection des pauses naturelles entre mots (gap > PAUSE_THRESHOLD_MS)
-    → ne dépend PAS de la ponctuation dans les timestamps ElevenLabs
-  - Limite de mots max par chunk (fallback)
-  - Les deux conditions combinées → coupures naturelles et professionnelles
+Approche :
+  - 1 section du script = 1 sous-titre affiché pendant toute la durée du plan
+  - Le texte complet de la section est affiché d'un bloc (pas de découpage mot par mot)
+  - La durée du sous-titre correspond exactement à la durée du clip de la section
 """
 from __future__ import annotations
 from typing import Any
-from app.models import SubtitleStyle, WordTimestamp
-
-# Seuil de pause entre deux mots pour considérer une fin de phrase (ms)
-PAUSE_THRESHOLD_MS = 200
+from app.models import ScriptSection, SubtitleStyle
 
 # ── Configurations visuelles par style ──────────────────────────────────────
 
 _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
     SubtitleStyle.TIKTOK: {
-        "words_per_chunk": 3,
         "font_family": "Montserrat",
         "font_weight": "900",
         "font_size": "6 vmin",
@@ -29,7 +24,6 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
         "width": "80%",
     },
     SubtitleStyle.CLASSIQUE: {
-        "words_per_chunk": 6,
         "font_family": "Montserrat",
         "font_weight": "700",
         "font_size": "4 vmin",
@@ -44,7 +38,6 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
         "background_border_radius": "0.4 vmin",
     },
     SubtitleStyle.CINEMA: {
-        "words_per_chunk": 7,
         "font_family": "Montserrat",
         "font_weight": "300",
         "font_size": "3 vmin",
@@ -58,33 +51,44 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
 
 
 def build_subtitle_elements(
-    timestamps: list[WordTimestamp],
+    sections: list[ScriptSection],
+    section_durations: dict[int, float],
     style: SubtitleStyle,
     track: int = 6,
 ) -> list[dict[str, Any]]:
     """
-    Construit les éléments text Creatomate.
+    Construit les éléments text Creatomate : 1 élément par section du script.
 
-    La segmentation utilise les pauses naturelles entre mots (≥ PAUSE_THRESHOLD_MS)
-    plutôt que la ponctuation — plus robuste car indépendant du format ElevenLabs.
+    Chaque sous-titre affiche le texte COMPLET de la section pendant toute
+    la durée du plan (section_durations[section.id]).
+    Les sections sont triées par id pour recalculer les temps de départ cumulatifs.
     """
-    if not timestamps:
+    if not sections or not section_durations:
         return []
 
     cfg = _STYLE_CONFIGS[style]
-    chunks = _segment_by_pause(timestamps, cfg["words_per_chunk"])
     elements: list[dict[str, Any]] = []
 
-    for chunk in chunks:
-        if chunk["duration_s"] < 0.05:
+    # Calcul des temps de départ cumulatifs dans l'ordre des sections
+    current_time = 0.0
+    for section in sorted(sections, key=lambda s: s.id):
+        duration = section_durations.get(section.id)
+        if duration is None or duration < 0.05:
+            if duration:
+                current_time += duration
+            continue
+
+        text = section.text.strip()
+        if not text:
+            current_time += duration
             continue
 
         el: dict[str, Any] = {
             "type": "text",
             "track": track,
-            "time": round(chunk["start_s"], 3),
-            "duration": round(chunk["duration_s"], 3),
-            "text": chunk["text"],
+            "time": round(current_time, 3),
+            "duration": round(duration, 3),
+            "text": text,
             "font_family": cfg["font_family"],
             "font_weight": cfg["font_weight"],
             "font_size": cfg["font_size"],
@@ -111,54 +115,6 @@ def build_subtitle_elements(
                 el["background_border_radius"] = cfg["background_border_radius"]
 
         elements.append(el)
+        current_time += duration
 
     return elements
-
-
-def _segment_by_pause(
-    timestamps: list[WordTimestamp],
-    words_per_chunk: int,
-) -> list[dict[str, Any]]:
-    """
-    Segmente les mots en chunks selon deux critères :
-      1. Pause naturelle entre mots (gap ≥ PAUSE_THRESHOLD_MS) si ≥ 2 mots
-      2. Limite max de mots (words_per_chunk)
-
-    Les pauses naturelles correspondent aux fins de phrases/clauses dans la
-    synthèse vocale ElevenLabs — méthode fiable indépendante de la ponctuation.
-    """
-    chunks: list[dict[str, Any]] = []
-    group: list[WordTimestamp] = []
-
-    for i, ts in enumerate(timestamps):
-        if not ts.word.strip():
-            continue
-        group.append(ts)
-
-        # Calcul du gap avec le mot suivant
-        is_last = (i == len(timestamps) - 1)
-        next_gap_ms = 0
-        if not is_last:
-            # Cherche le prochain mot non-vide
-            for j in range(i + 1, len(timestamps)):
-                if timestamps[j].word.strip():
-                    next_gap_ms = timestamps[j].start_ms - ts.end_ms
-                    break
-
-        has_pause = (not is_last) and (next_gap_ms >= PAUSE_THRESHOLD_MS)
-
-        should_break = (
-            is_last
-            or len(group) >= words_per_chunk
-            or (has_pause and len(group) >= 2)
-        )
-
-        if should_break:
-            chunks.append({
-                "text":       " ".join(w.word for w in group),
-                "start_s":    group[0].start_ms / 1000.0,
-                "duration_s": (group[-1].end_ms - group[0].start_ms) / 1000.0,
-            })
-            group = []
-
-    return chunks
