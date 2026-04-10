@@ -317,11 +317,11 @@ def _build_source_payload(request: CreatomateRenderRequest) -> dict:
         })
 
     # ── Track 6 : Sous-titres synchronisés (optionnel) ────────────────────────
-    if request.subtitle_style and request.sections:
+    if request.subtitle_style and request.timestamps:
         subtitle_elements = build_subtitle_elements(
-            sections=request.sections,
-            section_durations=request.section_durations,
+            timestamps=request.timestamps,
             style=request.subtitle_style,
+            audio_speed=request.audio_speed,
             track=6,
         )
         elements.extend(subtitle_elements)
