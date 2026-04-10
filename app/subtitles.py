@@ -8,7 +8,8 @@ Responsabilités :
   - Construire les éléments text Creatomate avec timing précis (ms → s)
   - Appliquer le style choisi (TikTok / Classique / Cinéma)
 
-Les sous-titres s'intègrent sur le Track 6 de la composition Creatomate.
+NOTE : elevenlabs.py doit utiliser "alignment" (pas "normalized_alignment")
+pour que la ponctuation soit conservée dans les mots (ex: "ans." pas "ans").
 """
 from __future__ import annotations
 
@@ -16,6 +17,10 @@ from typing import Any
 
 from app.models import SubtitleStyle, WordTimestamp
 
+# Caractères de ponctuation pouvant être des "mots" seuls en français
+# (ex: espace avant ? en français → "?" est un token séparé)
+_STANDALONE_SENTENCE_END = {".", "!", "?", "…", "»", "\""}
+_STANDALONE_CLAUSE_END   = {",", ";", ":", "—", "–"}
 
 # ── Configurations visuelles par style ──────────────────────────────────────
 
@@ -24,40 +29,38 @@ _STYLE_CONFIGS: dict[SubtitleStyle, dict[str, Any]] = {
         "words_per_chunk": 3,
         "font_family": "Montserrat",
         "font_weight": "900",
-        "font_size": "9 vmin",
+        "font_size": "7 vmin",
         "fill_color": "#ffffff",
         "stroke_color": "#000000",
-        "stroke_width": "0.7 vmin",
+        "stroke_width": "0.6 vmin",
         "y": "72%",
-        "width": "88%",
-        "background_color": None,
+        "width": "80%",
     },
     SubtitleStyle.CLASSIQUE: {
         "words_per_chunk": 5,
         "font_family": "Open Sans",
         "font_weight": "700",
-        "font_size": "5.5 vmin",
-        "fill_color": "#ffffff",
-        "stroke_color": "#000000",
-        "stroke_width": "0.3 vmin",
-        "y": "86%",
-        "width": "90%",
-        "background_color": "rgba(0,0,0,0.6)",
-        "background_x_padding": "3%",
-        "background_y_padding": "1.5%",
-        "background_border_radius": "0.5 vmin",
-    },
-    SubtitleStyle.CINEMA: {
-        "words_per_chunk": 6,
-        "font_family": "Georgia",
-        "font_weight": "400",
         "font_size": "4.5 vmin",
         "fill_color": "#ffffff",
         "stroke_color": "#000000",
-        "stroke_width": "0.2 vmin",
-        "y": "87%",
+        "stroke_width": "0.25 vmin",
+        "y": "86%",
         "width": "82%",
-        "background_color": None,
+        "background_color": "rgba(0,0,0,0.6)",
+        "background_x_padding": "2.5%",
+        "background_y_padding": "1%",
+        "background_border_radius": "0.4 vmin",
+    },
+    SubtitleStyle.CINEMA: {
+        "words_per_chunk": 7,
+        "font_family": "Georgia",
+        "font_weight": "400",
+        "font_size": "3.5 vmin",
+        "fill_color": "#ffffff",
+        "stroke_color": "#000000",
+        "stroke_width": "0.15 vmin",
+        "y": "88%",
+        "width": "78%",
     },
 }
 
@@ -74,13 +77,8 @@ def build_subtitle_elements(
     phrase (. ! ?) et de clause (, ; :), pour des sous-titres qui suivent
     le rythme naturel de la voix off plutôt qu'un compte fixe de mots.
 
-    Args:
-        timestamps: Liste de WordTimestamp depuis ElevenLabs.
-        style:      Style visuel (TIKTOK / CLASSIQUE / CINEMA).
-        track:      Track Creatomate (défaut : 6).
-
-    Returns:
-        Liste de dicts prêts à injecter dans le payload Creatomate.
+    Requiert que elevenlabs.py utilise "alignment" (pas "normalized_alignment")
+    afin que la ponctuation soit présente dans les mots.
     """
     if not timestamps:
         return []
@@ -142,16 +140,43 @@ def _group_words_smart(
       1. Fin de phrase (. ! ? …) si ≥ 2 mots → coupure immédiate
       2. Pause logique (, ; : —)  si ≥ 3 mots → coupure immédiate
       3. Limite de taille (words_per_chunk)     → coupure forcée
+
+    Gère deux cas :
+      - Ponctuation attachée au mot : "ans." → word[-1] == "."
+      - Ponctuation séparée (français) : "ans" puis "?" → mot seul
     """
     chunks: list[dict[str, Any]] = []
     current_group: list[WordTimestamp] = []
 
     for ts in timestamps:
-        current_group.append(ts)
         word = ts.word.strip()
+        if not word:
+            continue
 
-        ends_sentence = bool(word) and word[-1] in ".!?…"
-        ends_clause   = bool(word) and word[-1] in ",;:—"
+        # Ponctuation seule (ex: "?" séparé en français) — flush le groupe courant
+        is_standalone_punct = (
+            word in _STANDALONE_SENTENCE_END or
+            word in _STANDALONE_CLAUSE_END
+        )
+        if is_standalone_punct:
+            if current_group:
+                # Attache le signe au dernier mot pour l'affichage
+                last = current_group[-1]
+                current_group[-1] = WordTimestamp(
+                    word=last.word + word,
+                    start_ms=last.start_ms,
+                    end_ms=ts.end_ms,
+                )
+                is_sentence_end = word in _STANDALONE_SENTENCE_END
+                if is_sentence_end or len(current_group) >= 3:
+                    _flush(current_group, chunks)
+                    current_group = []
+            continue
+
+        current_group.append(ts)
+
+        ends_sentence = word[-1] in ".!?…" or word[-1] in _STANDALONE_SENTENCE_END
+        ends_clause   = word[-1] in ",;:—–" or word[-1] in _STANDALONE_CLAUSE_END
 
         should_break = (
             len(current_group) >= words_per_chunk
@@ -171,8 +196,12 @@ def _group_words_smart(
 
 def _flush(group: list[WordTimestamp], chunks: list[dict]) -> None:
     """Convertit un groupe de WordTimestamp en dict de chunk."""
+    # Filtre les tokens purement vides
+    words = [w.word for w in group if w.word.strip()]
+    if not words:
+        return
     chunks.append({
-        "text":       " ".join(w.word for w in group),
+        "text":       " ".join(words),
         "start_s":    group[0].start_ms  / 1000.0,
         "duration_s": (group[-1].end_ms - group[0].start_ms) / 1000.0,
     })

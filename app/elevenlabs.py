@@ -125,7 +125,9 @@ def _parse_response(data: dict, voice_id: str, script: str) -> ElevenLabsResult:
     audio_bytes = base64.b64decode(data["audio_base64"])
     audio_path = _save_audio(audio_bytes)
 
-    alignment = data.get("normalized_alignment", {})
+    # "alignment" contient la ponctuation attachée aux mots (ex: "ans.")
+    # "normalized_alignment" la supprime → le check de ponctuation dans subtitles.py ne fonctionne pas
+    alignment = data.get("alignment") or data.get("normalized_alignment", {})
     timestamps = _build_word_timestamps(alignment)
 
     # Durée réelle = fin du dernier mot ; fallback estimé si aucun timestamp
