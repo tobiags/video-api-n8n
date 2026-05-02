@@ -25,9 +25,9 @@ Produire des publicités vidéo à la chaîne est **lent, coûteux et difficile 
 
 **VideoGen** est un pipeline d'automatisation qui transforme une ligne Google Sheets en une vidéo publicitaire complète en moins de 15 minutes.
 
-L'opérateur remplit une ligne dans un tableau (script, voix, format, durée) et met le statut sur `OK`. Le reste est automatique : analyse du script, génération de la voix off, création des clips B-roll, assemblage et livraison.
+L'opérateur remplit une ligne dans un tableau (script, voix, format, durée, style de sous-titres) et met le statut sur `OK`. Le reste est automatique : analyse du script, génération de la voix off, création des clips B-roll, génération des sous-titres synchronisés, assemblage et livraison.
 
-**Résultat :** une vidéo prête à diffuser sur Google Drive, avec tracking complet dans le Sheet.
+**Résultat :** une vidéo prête à diffuser sur Google Drive avec sous-titres karaoke intégrés, tracking complet dans le Sheet.
 
 ---
 
@@ -56,8 +56,9 @@ flowchart TD
 |---|-------|--------|-------|
 | 1 | n8n détecte le statut `OK` et appelle l'API | n8n | < 1 min |
 | 2 | Claude analyse le script, génère les prompts B-roll et les timings | Claude AI | ~30s |
-| 3 | ElevenLabs synthétise la voix, Kling génère les clips B-roll | ElevenLabs + Kling | ~5–10 min |
-| 4 | Creatomate assemble la vidéo finale, upload Drive, mise à jour Sheet | Creatomate | ~2 min |
+| 3 | ElevenLabs synthétise la voix (timestamps mot à mot), Kling génère les clips B-roll | ElevenLabs + Kling | ~5–10 min |
+| 4 | Génération des sous-titres synchronisés (segmentation + karaoke) | VideoGen API | < 1s |
+| 5 | Creatomate assemble la vidéo finale (voix + clips + sous-titres), upload Drive, mise à jour Sheet | Creatomate | ~2 min |
 
 ---
 
@@ -86,10 +87,12 @@ flowchart TD
 **1 — L'opérateur remplit une ligne dans le Sheet**
 
 ```
-| Script                  | Statut | Format   | Voix ID           | Durée | Vitesse voix |
-|-------------------------|--------|----------|-------------------|-------|--------------|
-| Il y a une femme qui... | OK     | vertical | tMyQcCxfGDdIt7wJ  | 70    | 1.5          |
+| Script                  | Statut | Format   | Voix ID           | Durée | Vitesse voix | Sous-titres |
+|-------------------------|--------|----------|-------------------|-------|--------------|-------------|
+| Il y a une femme qui... | OK     | vertical | tMyQcCxfGDdIt7wJ  | 70    | 1.5          | tiktok      |
 ```
+
+Colonne `Sous-titres` : `tiktok` (blanc bold 7.5vmin), `classique` (blanc 5vmin + fond), ou `cinema` (blanc light 3.5vmin)
 
 **2 — n8n détecte la ligne et lance le pipeline**
 
@@ -113,6 +116,68 @@ Upload Google Drive  →  Webhook n8n  →  Statut = "Livré" + lien dans le She
 ```
 
 ⏱️ **Temps total : 8 à 15 minutes** | 💰 **Coût moyen : ~2,50 $ par vidéo** (dès le 2e mois)
+
+---
+
+## 📝 Sous-titres synchronisés (Karaoke style)
+
+VideoGen génère automatiquement des **sous-titres synchronisés mot par mot** en style CapCut/TikTok.
+
+### Architecture
+
+```
+ElevenLabs timestamps (ms)
+    ↓
+Segmentation DaVinci Resolve
+  ├─ Découpage en phrases (gaps ≥ 400 ms)
+  ├─ Limitation per ligne : 38 caractères max (Netflix = 42)
+    ↓
+Affichage karaoke
+  ├─ Chaque mot déclenche un update
+  ├─ Le texte s'accumule : "mot1" → "mot1 mot2" → "mot1 mot2 mot3"
+  ├─ Les pauses naturelles = vide à l'écran
+    ↓
+Creatomate (Track 6)
+  └─ Rendu final vidéo
+```
+
+### Configuration par style
+
+| Style | Couleur | Taille | Poids | Position | Notes |
+|-------|---------|--------|-------|----------|-------|
+| **TikTok** | Blanc (#ffffff) | 7.5 vmin | 900 (ultra-bold) | 75% | Impact maximal, lisible sur n'importe quel fond |
+| **Classique** | Blanc (#ffffff) | 5 vmin | 700 (bold) | 80% | Avec fond semi-transparent noir (55%) |
+| **Cinéma** | Blanc (#ffffff) | 3.5 vmin | 300 (light) | 88% | Discret, élégant, effet film |
+
+Tous les styles :
+- Centré horizontalement
+- Contour noir fin pour lisibilité
+- Synchronisés au mot avec ElevenLabs timestamps
+- Pas de background sauf Classique
+
+### Exemple de rendu
+
+```
+t=0.0s : "Le"
+t=0.3s : "Le texte"
+t=0.6s : "Le texte s'accumule"
+t=1.2s : "Le texte s'accumule progressivement"
+t=1.5s : [pause = vide]
+t=2.1s : "Chaque"
+t=2.4s : "Chaque ligne"
+...
+```
+
+### Configuration n8n
+
+La colonne `O` ("Sous-titres") du Google Sheet accepte : `tiktok`, `classique`, `cinema`.
+
+```javascript
+// Expression n8n pour extraire le style
+subtitle_style: $('Filtre Statut OK').item.json['Sous-titres'] 
+  ? $('Filtre Statut OK').item.json['Sous-titres'].toString().toLowerCase().trim() 
+  : null
+```
 
 ---
 
@@ -246,11 +311,12 @@ video-api/
 │   ├── elevenlabs.py       # Génération voix off + timestamps mot à mot
 │   ├── kling.py            # Génération clips B-roll par prompt
 │   ├── library.py          # Cascade B-roll : local → Pexels → Kling
-│   ├── creatomate.py       # Assemblage vidéo finale
+│   ├── creatomate.py       # Assemblage vidéo finale + sous-titres
+│   ├── subtitles.py        # Génération sous-titres karaoke (DaVinci Resolve + CapCut)
 │   ├── script_parser.py    # Parser format script PLAN N — 0:00 — 0:05
 │   ├── review.py           # Page review + relaunch des prompts Kling
 │   ├── voice_test.py       # Endpoint test vitesse voix (audio uniquement)
-│   ├── models.py           # Schémas Pydantic
+│   ├── models.py           # Schémas Pydantic (+ SubtitleStyle enum)
 │   ├── config.py           # Configuration centralisée
 │   └── errors.py           # Gestion d'erreurs unifiée
 ├── tests/                  # 71 tests pytest
